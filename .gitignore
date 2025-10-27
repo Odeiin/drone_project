@@ -1,0 +1,36 @@
+# ----- Build outputs (re-created by idf.py) -----
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+*.map
+*.bin
+*.elf
+
+# ----- ESP-IDF Component Manager -----
+# Keep dependencies.lock committed; ignore the cache
+managed_components/
+
+# ----- SDK config backups -----
+sdkconfig.old
+# If you do NOT want to commit your local config, uncomment the next line:
+# sdkconfig
+
+# ----- IDE / editor -----
+.vscode/
+.idea/
+*.code-workspace
+
+# ----- Python / tooling -----
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# ----- Logs / misc -----
+*.log
+*.swp
+
+# ----- OS junk -----
+.DS_Store
+Thumbs.db
