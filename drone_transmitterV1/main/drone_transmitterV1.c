@@ -1,14 +1,19 @@
 #include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
+#include "driver/spi_master.h"
+#include "driver/spi_common.h"
 #include "sdkconfig.h"
 
 #include "esp_adc/adc_oneshot.h"
 #include "hal/adc_types.h"
 
-
 #include "drone_transmitterV1.h"
+#include "NRF24L01.h"
 
 
 
@@ -30,15 +35,25 @@ struct ControlData controlDataGlobal = {
 void app_main(void)
 {
 
-  // i think the readign task should probably be higher priority than the sending data task
+  // i think the reading task should probably be higher priority than the sending data task
   // if the control data isnt updated sending doesnt even matter anyway
-  xTaskCreate(readInputsTask, "reading inputs", 2500, NULL, 1, NULL);
+  //xTaskCreate(readInputsTask, "reading inputs", 2500, NULL, 1, NULL);
+
+  xTaskCreate(sendDataTask, "sending data", 8192, NULL, 1, NULL); // not sure about mem size
 
 }
 
 
 void sendDataTask(void *arg) {
+    NRF_addr_t rxAddr = {0x1A, 0x1A, 0x1A, 0x1A, 0x1A};
+    NRF_addr_t txAddr = {0x50, 0x50, 0x50, 0x50, 0x50};
+    NRF_handle_t radio = NRF_init(rxAddr, txAddr);
+  for (;;) {
 
+    printf("done\n");
+    //vTaskDelay(pdMS_TO_TICKS(5)); // 200 hz 
+    vTaskDelay(pdMS_TO_TICKS(1000)); // 200 hz 
+  }
 }
 
 

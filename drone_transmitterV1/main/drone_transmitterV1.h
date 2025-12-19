@@ -8,6 +8,9 @@
 #include "hal/adc_types.h"
 
 
+
+
+
 // joystick ADC1 inputs
 const adc_channel_t leftStickX = ADC_CHANNEL_0; // pin 36
 const adc_channel_t leftStickY = ADC_CHANNEL_3; // pin 39
@@ -16,6 +19,7 @@ const adc_channel_t rightStickY = ADC_CHANNEL_6; // pin 34
 // button GPIO input
 // const int stopButton = 12; // DOESNT EXIST ON PROTOTYPE BOARD
 
+// change to some size uint
 struct ControlData {  
   int verticalSpeed; // +ve = Acsend, -ve = Descend     
   int forwardSpeed; // +ve = Forward, -ve = Backwards      
