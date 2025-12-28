@@ -9,7 +9,9 @@
 
 #include "NRF24L01.h"
 #include "drone_err.h"
+#include "NRF_err.h"
 #include "esp_err.h"
+
 
 // initialises a SPI communication and returns the handle
 spi_device_handle_t SPI_init() {
@@ -43,12 +45,13 @@ spi_device_handle_t SPI_init() {
 
 // transmits an SPI buffer, the receiver buffer is modified by this function, length is how many bits shifted out of MOSI
 // rxlength is how many bits are copied into the rx buffer
-void SPI_transmit(spi_device_handle_t SPI, uint8_t *txBuffer, uint8_t *rxBuffer, uint8_t length, uint8_t rxLength) {
+// lengths are now bytes
+void SPI_transmit(spi_device_handle_t SPI, const void *txBuffer, void *rxBuffer, size_t length_Bytes, size_t rxLength_Bytes) {
   spi_transaction_t trans;
   memset(&trans, 0, sizeof(trans));
 
-  trans.length = length;
-  trans.rxlength = rxLength;
+  trans.length = (length_Bytes * 8);
+  trans.rxlength = (rxLength_Bytes * 8);
   trans.tx_buffer = txBuffer; // in buffer
   trans.rx_buffer = rxBuffer; // out buffer
 	// buffers modified
@@ -64,12 +67,12 @@ drone_err_t NRF_init(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t txAddr, 
     return NRF_INVALID_CHANNEL;
   }
 
-  radio.SPI = SPI_init();
-  drone_err_t err = NRF_enter_standby(&radio);
+  radio->SPI = SPI_init();
+  drone_err_t err = NRF_enter_standby(radio);
   if (err) {
     return err;
   }
-  radio.state = standby;
+  radio->state = standby;
 
   // setting initial values
   uint8_t txBuffer[1 + 5];
@@ -81,27 +84,27 @@ drone_err_t NRF_init(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t txAddr, 
   // setting Data Rate to 1Mbps, [RF_DR_LOW, RF_DR_HIGH] = 00
   txBuffer[0] = CMD_R_REG | 0x06; // read RF_SETUP
   txBuffer[1] = CMD_NOP;
-  SPI_transmit(radio.SPI, txBuffer, rxBuffer, 16, 16);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
   txBuffer[0] = CMD_W_REG | 0x06; // write to RF_SETUP
   txBuffer[1] = rxBuffer[1] & 0xD7; // [RF_DR_LOW, RF_DR_HIGH] = 00
-  SPI_transmit(radio.SPI, txBuffer, rxBuffer, 16, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 0);
 
   // setting RX_ADDR_P1
   txBuffer[0] = CMD_W_REG | 0x0B; // write to RX_ADDR_P1
   memcpy(&txBuffer[1], rxAddr, 5);
-  SPI_transmit(radio.SPI, txBuffer, rxBuffer, 48, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 6, 0);
 
   // setting TX_ADDR
   txBuffer[0] = CMD_W_REG | 0x10; // write to TX_ADDR
   memcpy(&txBuffer[1], txAddr, 5);
-  SPI_transmit(radio.SPI, txBuffer, rxBuffer, 48, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 6, 0);
 
   // setting RF_CH
   txBuffer[0] = CMD_W_REG | 0x05; // write to RF_CH
   txBuffer[1] = RF_CH;
-  SPI_transmit(radio.SPI, txBuffer, rxBuffer, 16, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 0);
 
-  return radio;
+  return DRONE_OK;
 }
 
 // maybe return ints for error codes
@@ -119,11 +122,11 @@ drone_err_t NRF_enter_power_down(NRF_handle_t *radio) {
 
   txBuffer[0] = CMD_R_REG | 0x00; // read config
   txBuffer[1] = CMD_NOP;
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 16);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
 
   txBuffer[0] = CMD_W_REG | 0x00; // write to config (ORing just to be explicit im not stupid i swear)
   txBuffer[1] = rxBuffer[1] & 0xFD; // config PWR_UP bit -> 0
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 0);
 
   radio->state = powerDown;
   return DRONE_OK;
@@ -141,11 +144,11 @@ drone_err_t NRF_enter_standby(NRF_handle_t *radio) {
 
   txBuffer[0] = CMD_R_REG | 0x00; // read config
   txBuffer[1] = CMD_NOP;
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 16);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
 
   txBuffer[0] = CMD_W_REG | 0x00; // write to config
   txBuffer[1] = rxBuffer[1] | 0x02; // config PWR_UP bit -> 1
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 0);
 
   // if (radio->state == powerDown) {
   //   vTaskDelay(pdMS_TO_TICKS(2));
@@ -163,18 +166,19 @@ drone_err_t NRF_enter_RXmode(NRF_handle_t *radio) {
   if (radio->state != standby) {
     return NRF_ILLEGAL_TRANSITION;
   }
-  gpio_set_level(CE_pin, 1); // required for transition
 
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
   txBuffer[0] = CMD_R_REG | 0x00; // read config
   txBuffer[1] = CMD_NOP;
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 16);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
 
   txBuffer[0] = CMD_W_REG | 0x00; // write to config
   txBuffer[1] = rxBuffer[1] | 0x01; // config PRIM_RX bit -> 1
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 0);
+
+  gpio_set_level(CE_pin, 1); // required for transition
 
   radio->state = RXmode;
   return DRONE_OK;
@@ -191,55 +195,127 @@ drone_err_t NRF_enter_TXmode(NRF_handle_t *radio) {
   if (TX_Fifo_Empty(radio)) {
     return NRF_EMPTY_TXFIFO;
   }
-  gpio_set_level(CE_pin, 1); // required for transition
 
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
   txBuffer[0] = CMD_R_REG | 0x00; // read config
   txBuffer[1] = CMD_NOP;
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 16);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
 
   txBuffer[0] = CMD_W_REG | 0x00; // write to config
   txBuffer[1] = rxBuffer[1] & 0xFE; // config PRIM_RX bit -> 0
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 0);
+
+  gpio_set_level(CE_pin, 1); // required for transition
 
   radio->state = TXmode;
   return DRONE_OK;
 }
 
+// creates 10us pulse for sending data in TXmode, busy waits
+drone_err_t NRF_pulse_TXmode(NRF_handle_t *radio) {
+  if (radio->state != standby) {
+    return NRF_ILLEGAL_TRANSITION;
+  }
+  if (TX_Fifo_Empty(radio)) {
+    return NRF_EMPTY_TXFIFO;
+  }
+
+  uint8_t txBuffer[2];
+  uint8_t rxBuffer[2];
+
+  txBuffer[0] = CMD_R_REG | 0x00; // read config
+  txBuffer[1] = CMD_NOP;
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
+
+  txBuffer[0] = CMD_W_REG | 0x00; // write to config
+  txBuffer[1] = rxBuffer[1] & 0xFE; // config PRIM_RX bit -> 0
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 0);
+
+  gpio_set_level(CE_pin, 1); // required for transition
+  esp_rom_delay_us(10);
+  gpio_set_level(CE_pin, 0);
+
+  return DRONE_OK;
+}
+
 // true if fifo empty, false otherwise
-bool TX_Fifo_Empty(NRF_handle_t *radio) {
+bool NRF_TX_Fifo_Empty(NRF_handle_t *radio) {
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
   txBuffer[0] = CMD_R_REG | 0x17; // read FIFO_STATUS
   txBuffer[1] = CMD_NOP;
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 16);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
+  
+  printf("%X, %X", rxBuffer[0], rxBuffer[1]);
 
-  if (rxBuffer[1] & 0x10 == 0x10) {
+  if ((rxBuffer[1] & 0x10) == 0x10) { // TX_EMPTY == 1
     return true;
   }
   return false;
 }
 
 // true if fifo full, false otherwise
-bool TX_Fifo_Full(NRF_handle_t *radio) {
+bool NRF_TX_Fifo_Full(NRF_handle_t *radio) {
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
   txBuffer[0] = CMD_R_REG | 0x17; // read FIFO_STATUS
   txBuffer[1] = CMD_NOP;
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 16, 16);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
 
-  if (rxBuffer[1] & 0x20 == 0x20) {
+  if ((rxBuffer[1] & 0x20) == 0x20) { // TX_FULL == 1
     return true;
   }
   return false;
 }
 
+// true if fifo empty, false otherwise
+bool NRF_RX_Fifo_Empty(NRF_handle_t *radio) {
+  uint8_t txBuffer[2];
+  uint8_t rxBuffer[2];
+
+  txBuffer[0] = CMD_R_REG | 0x17; // read FIFO_STATUS
+  txBuffer[1] = CMD_NOP;
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
+
+  if ((rxBuffer[1] & 0x01) == 0x01) { // RX_EMPTY == 1
+    return true;
+  }
+  return false;
+}
+
+// true if fifo full, false otherwise
+bool NRF_RX_Fifo_Full(NRF_handle_t *radio) {
+  uint8_t txBuffer[2];
+  uint8_t rxBuffer[2];
+
+  txBuffer[0] = CMD_R_REG | 0x17; // read FIFO_STATUS
+  txBuffer[1] = CMD_NOP;
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
+
+  if ((rxBuffer[1] & 0x02) == 0x02) { // RX_FULL == 1
+    return true;
+  }
+  return false;
+}
+
+
+drone_err_t NRF_clear_MAX_RT(NRF_handle_t *radio) {
+  uint8_t txBuffer[2];
+  uint8_t rxBuffer[2];
+
+  txBuffer[0] = CMD_W_REG | 0x07; // write to STATUS
+  txBuffer[1] = rxBuffer[1] | 0x10; // MAX_RT bit -> 1
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 0);
+
+  return DRONE_OK;
+}
+
 // packetLength is in bytes
-drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, uint8_t packetLength) {
+drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, size_t packetLength) {
   if (packetLength > MAX_PACKET_SIZE || packetLength == 0) {
     return NRF_INVALID_PACKET_LEN;
   }
@@ -248,30 +324,45 @@ drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, uint8_t 
   }
 
   uint8_t txBuffer[MAX_PACKET_SIZE + 1];
-  //uint8_t rxBuffer[2];
+  uint8_t rxBuffer[2];
 
-  uint8_t SPILength = (packetLength + 1) * 8;
-  txBuffer[0] = W_TX_PAYLOAD; // write to TX fifo
+  txBuffer[0] = CMD_W_TX_PAYLOAD; // write to TX fifo
   memcpy(&txBuffer[1], packet, packetLength);
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, SPILength, 0);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, packetLength, 0);
+
+  return DRONE_OK;
+}
+
+// maybe just make do max size then caller can handle 
+// the receiver should be expecting a standard packet size so I thought it made sense to pass in a packet size 
+drone_err_t NRF_read_Fifo(NRF_handle_t *radio, uint8_t *packet, size_t packetLength) {
+  if (RX_Fifo_Empty(radio)) {
+    return NRF_EMPTY_RXFIFO;  
+  }
+
+  uint8_t txBuffer[MAX_PACKET_SIZE + 1];
+  uint8_t rxBuffer[MAX_PACKET_SIZE + 1];
+
+  txBuffer[0] = CMD_R_RX_PAYLOAD; // write to TX fifo
+  memset(&txBuffer[1], CMD_NOP, MAX_PACKET_SIZE);
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, MAX_PACKET_SIZE, MAX_PACKET_SIZE);
+
+  memcpy(packet, &rxBuffer[1], MAX_PACKET_SIZE);
 
   return DRONE_OK;
 }
 
 
-drone_err_t NRF_read_Fifo(NRF_handle_t *radio, uint8_t *packetLocation) {
-
-  if rxfifo is empty {
-    return
+drone_err_t NRF_flush_TX(NRF_handle_t *radio) {
+  if (radio->state != TXmode) {
+    return NRF_INCORRECT_STATE;
   }
 
-  need to fill with NOPS to read all the data!  ! !  ! 
   uint8_t txBuffer[1];
-  uint8_t rxBuffer[MAX_PACKET_SIZE];
+  //uint8_t rxBuffer[2];
 
-  txBuffer[0] = W_TX_PAYLOAD; // write to TX fifo
-  memcpy(&txBuffer[1], packet, packetLength);
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, SPILength, 0);
+  txBuffer[0] = CMD_FLUSH_TX // flush TX
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 1, 0);
 
   return DRONE_OK;
 }
