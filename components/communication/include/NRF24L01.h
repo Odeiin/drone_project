@@ -2,6 +2,8 @@
 #include "driver/spi_common.h"
 #include "driver/gpio.h"
 
+#include "control_protocol.h"
+#include "joysticks.h"
 #include "drone_err.h"
 
 //GPIO pins
@@ -23,6 +25,7 @@
 #define CMD_NOP 0xFF
 
 #define MAX_PACKET_SIZE 32
+#define PACKET_SIZE sizeof(ControlData_t)
 
 // radio addresses are stored as an array of 5 uint8_t
 typedef uint8_t NRF_addr_t[5];
@@ -56,7 +59,7 @@ spi_device_handle_t SPI_init();
 void SPI_transmit(spi_device_handle_t SPI, const void *txBuffer, void *rxBuffer, size_t length_Bytes, size_t rxLength_Bytes);
 
 // initialises an radio and returns its handle
-drone_err_t NRF_init(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t txAddr, NRF_channel_t RF_CH);
+drone_err_t NRF_init(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t txAddr, NRF_channel_t RF_CH, size_t packetLength);
 
 // transitions the radio to power down state
 drone_err_t NRF_enter_power_down(NRF_handle_t *radio);
@@ -64,23 +67,24 @@ drone_err_t NRF_enter_power_down(NRF_handle_t *radio);
 // transitions the radio to standby state
 drone_err_t NRF_enter_standby(NRF_handle_t *radio);
 
-// supposed to wait for 130us afterwards before it can send data
 drone_err_t NRF_enter_RXmode(NRF_handle_t *radio);
 
-// supposed to wait for 130us afterwards before it can send data
 drone_err_t NRF_enter_TXmode(NRF_handle_t *radio);
 
-// true if fifo empty, false otherwise
-bool TX_Fifo_Empty(NRF_handle_t *radio);
-
-// true if fifo full, false otherwise
-bool TX_Fifo_Full(NRF_handle_t *radio);
+// creates 10us pulse for sending data in TXmode, busy waits
+drone_err_t NRF_pulse_TXmode(NRF_handle_t *radio);
 
 // true if fifo empty, false otherwise
-bool RX_Fifo_Empty(NRF_handle_t *radio);
+bool NRF_TX_Fifo_Empty(NRF_handle_t *radio);
 
 // true if fifo full, false otherwise
-bool RX_Fifo_Full(NRF_handle_t *radio);
+bool NRF_TX_Fifo_Full(NRF_handle_t *radio);
+
+// true if fifo empty, false otherwise
+bool NRF_RX_Fifo_Empty(NRF_handle_t *radio);
+
+// true if fifo full, false otherwise
+bool NRF_RX_Fifo_Full(NRF_handle_t *radio);
 
 // packetLength is in bytes
 drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, size_t packetLength);

@@ -9,9 +9,18 @@
 #include "esp_adc/adc_oneshot.h"
 #include "hal/adc_types.h"
 
+#include "control_protocol.h"
 #include "joysticks.h"
 #include "drone_err.h"
+#include "joysticks_err.h"
 #include "esp_err.h"
+
+
+// joystick ADC1 inputs
+const adc_channel_t leftStickX = ADC_CHANNEL_0; // pin 36
+const adc_channel_t leftStickY = ADC_CHANNEL_3; // pin 39
+const adc_channel_t rightStickX = ADC_CHANNEL_7; // pin 35
+const adc_channel_t rightStickY = ADC_CHANNEL_6; // pin 34
 
 
 drone_err_t init_ADC1 (joystick_handle_t *joysticks) {
@@ -43,36 +52,38 @@ drone_err_t init_ADC1 (joystick_handle_t *joysticks) {
 
 drone_err_t readControls(joystick_handle_t *joysticks) {
 	assert(joysticks != NULL);
-  struct ControlData joystickData; 
+  ControlData_t joystickData;
+  int raw; 
 
   // right stick up/down
-  esp_err_t err = adc_oneshot_read(joysticks->adc, rightStickY, &joystickData.verticalSpeed); //reads value to joystickData.verticalSpeed
+  esp_err_t err = adc_oneshot_read(joysticks->adc, rightStickY, &raw);
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
+  joystickData.verticalSpeed = (int16_t)(raw - CENTER);
   // right stick left/right
-  err = adc_oneshot_read(joysticks->adc, rightStickX, &joystickData.turnSpeed);
+  err = adc_oneshot_read(joysticks->adc, rightStickX, &raw);
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
+  joystickData.turnSpeed = (int16_t)(raw - CENTER);
   // left stick up/down
-  err = adc_oneshot_read(joysticks->adc, leftStickY, &joystickData.forwardSpeed);
+  err = adc_oneshot_read(joysticks->adc, leftStickY, &raw);
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
+  joystickData.forwardSpeed = (int16_t)(raw - CENTER);
   // left stick left/right
-  err = adc_oneshot_read(joysticks->adc, leftStickX, &joystickData.rightSpeed);
+  err = adc_oneshot_read(joysticks->adc, leftStickX, &raw);
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
+  joystickData.rightSpeed = (int16_t)(raw - CENTER);
 
   // currently no button on controller
   joystickData.button = 0;
-  
-	// needs to consider race condition
-	joysticks->data = joystickData;
-	joysticks->dataIsNew = true;
-	
+
+	joysticks->data = joystickData;	
   return DRONE_OK;
 }
 
