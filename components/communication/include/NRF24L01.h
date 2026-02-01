@@ -10,11 +10,10 @@
 #define MISO_pin 19
 #define MOSI_pin 23
 #define SCK_pin 18
-#define CSN_pin 14
-#define CE_pin 4
-#define IRQ_pin 22
+// #define CSN_pin 14
+// #define CE_pin 4
+// #define IRQ_pin 22
 
-// have to add more when needed
 // NRF24L01 command set
 #define CMD_R_REG 0x00 // OR'd with 0b 000A AAAA where A is the reg address
 #define CMD_W_REG 0x20 // OR'd with 0b 000A AAAA where A is the reg address
@@ -25,7 +24,7 @@
 #define CMD_NOP 0xFF
 
 #define MAX_PACKET_SIZE 32
-#define PACKET_SIZE sizeof(ControlData_t)
+// #define PACKET_SIZE sizeof(ControlData_t)
 
 // radio addresses are stored as an array of 5 uint8_t
 typedef uint8_t NRF_addr_t[5];
@@ -44,22 +43,62 @@ typedef enum {
 	RXmode
 } radioState_t;
 
+typedef enum {
+	DATA_RATE_250KBPS,
+	DATA_RATE_1MBPS,
+	DATA_RATE_2MBPS
+} data_rate_t;
+
+typedef enum {
+	MIN,	// -18dBm
+	LOW,	// -12dBm
+	HIGH,	// -6dBm
+	MAX		// 0dBm
+} RF_power_level_t;
+
 typedef struct{
 	spi_device_handle_t SPI;
 	radioState_t state;
+	uint8_t CE_PIN;
+	uint8_t CSN_PIN;
+	uint8_t IRQ_PIN;
+	NRF_channel_t RF_CH;
+	NRF_addr_t rxAddr;
+	NRF_addr_t txAddr;
+	data_rate_t dataRate;
+	RF_power_level_t powerLevel;
+	size_t packetLength;
 } NRF_handle_t;
 
 
 // creates SPI config settings and returns the SPI handle
-spi_device_handle_t SPI_init();
+spi_device_handle_t SPI_init(uint8_t CSN_PIN);
 
-/** uses SPI config settings, transmits a tx buffer, rx buffer will be modified
- * 	for NRF24L01, the tx_buffer should be 2 bytes, the first byte being the command and the second being data 
- * */ 
+// uses SPI config settings, transmits a tx buffer, rx buffer will be modified
+// transmits an SPI buffer, the receiver buffer is modified by this function, length is how many bits shifted out of MOSI
+// rxlength is how many bits are copied into the rx buffer
+// lengths are now bytes
 void SPI_transmit(spi_device_handle_t SPI, const void *txBuffer, void *rxBuffer, size_t length_Bytes, size_t rxLength_Bytes);
 
-// initialises an radio and returns its handle
-drone_err_t NRF_init(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t txAddr, NRF_channel_t RF_CH, size_t packetLength);
+// initialises a NRF handle, moves radio to standby state, radio communication currently only supports pipe 0
+drone_err_t NRF_init(NRF_handle_t *radio, uint8_t CE_PIN, uint8_t CSN_PIN, uint8_t IRQ_PIN);
+
+// used to set the packet length, number of bytes in RX payload (only for data pipe 0)
+drone_err_t NRF_set_packet_length(NRF_handle_t *radio, size_t packetLength);
+
+// used to set TX address and RX address (RX address for pipe 0)
+drone_err_t NRF_set_address(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t txAddr);
+
+// set RF data rate
+// the reset values in the documentation says it resets -> 2Mbps but mine appears to reset -> 1Mbps
+drone_err_t NRF_set_data_rate(NRF_handle_t *radio, data_rate_t dataRate);
+
+// sets output power in TX mode
+// the lower the power level the less susceptible to noise but less range 
+drone_err_t NRF_set_power_level(NRF_handle_t *radio, RF_power_level_t powerLevel);
+
+// value between 0 and 127
+drone_err_t NRF_set_channel(NRF_handle_t *radio, NRF_channel_t RF_CH);
 
 // transitions the radio to power down state
 drone_err_t NRF_enter_power_down(NRF_handle_t *radio);

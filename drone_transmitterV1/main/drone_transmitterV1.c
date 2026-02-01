@@ -28,6 +28,7 @@
 QueueHandle_t dataQueue;
 
 
+
 // ControlData_t controlDataGlobal = {
 //   .forwardSpeed = 0,
 //   .rightSpeed = 0,
@@ -42,18 +43,6 @@ QueueHandle_t dataQueue;
 
 void app_main(void)
 {
-  // --------------------
-  // you should use IRQ later so remember to configure it as input
-  // GPIO init should be moved to an init function when i refactor NRF_init
-  gpio_config_t io_conf = {
-    .pin_bit_mask = (1ULL << CE_pin),      // Select GPIO 2
-    .mode = GPIO_MODE_OUTPUT,            // Set as output
-    .pull_up_en = GPIO_PULLUP_DISABLE,  // Disable pull-up
-    .pull_down_en = GPIO_PULLDOWN_DISABLE,  // Disable pull-down
-    .intr_type = GPIO_INTR_DISABLE             // Disable interrupts
-  };
-  gpio_config(&io_conf);
-  // --------------------
 
   // NRF needs 100ms to settle, id seen waiting longer somewhere, cant hurt
   vTaskDelay(pdMS_TO_TICKS(1000)); 
@@ -71,16 +60,41 @@ void app_main(void)
 
 }
 
-
+// should make an NRF_responding function or something to check it works at the start of each program
 void sendDataTask(void *arg) {
+  uint8_t ce_pin = 4;
+  uint8_t csn_pin = 14;
+  uint8_t irq_pin = 22;
 
-  // should make an NRF_responding function or something to check it works at the start of each program
-
+  // --------------------
+  // you should use IRQ later so remember to configure it as input
+  // GPIO init should be moved to an init function when i refactor NRF_init
+  gpio_config_t io_conf = {
+    .pin_bit_mask = (1ULL << ce_pin),      // Select GPIO 2
+    .mode = GPIO_MODE_OUTPUT,            // Set as output
+    .pull_up_en = GPIO_PULLUP_DISABLE,  // Disable pull-up
+    .pull_down_en = GPIO_PULLDOWN_DISABLE,  // Disable pull-down
+    .intr_type = GPIO_INTR_DISABLE             // Disable interrupts
+  };
+  gpio_config(&io_conf);
+  // --------------------
+  
   NRF_addr_t txAddr = {0x1A, 0x1A, 0x1A, 0x1A, 0x1A};
   NRF_addr_t rxAddr = {0x50, 0x50, 0x50, 0x50, 0x50};
   NRF_channel_t channel = 50;
-  NRF_handle_t radio;  
-  drone_err_t err = NRF_init(&radio, rxAddr, txAddr, channel, sizeof(ControlData_t));
+  NRF_handle_t radio;
+
+  drone_err_t err = NRF_init(&radio, ce_pin, csn_pin, irq_pin);
+  assert(err == DRONE_OK);
+  err = NRF_set_address(&radio, rxAddr, txAddr);
+  assert(err == DRONE_OK);
+  err = NRF_set_packet_length(&radio, sizeof(ControlData_t));
+  assert(err == DRONE_OK);
+  err = NRF_set_data_rate(&radio, DATA_RATE_250KBPS);
+  assert(err == DRONE_OK);
+  err = NRF_set_power_level(&radio, MIN);
+  assert(err == DRONE_OK);
+  err = NRF_set_channel(&radio, channel);
   assert(err == DRONE_OK);
   
   for (;;) {
@@ -97,20 +111,18 @@ void sendDataTask(void *arg) {
     txBuffer[0] = CMD_R_REG | 0x07;
     txBuffer[1] = CMD_NOP;
     SPI_transmit(radio.SPI, txBuffer, rxBuffer, 2, 2);
-    printf("status %02X, %02X\n", rxBuffer[0], rxBuffer[1]);
-
 
     ControlData_t packet;
     if (xQueueReceive(dataQueue, &packet, 0) == errQUEUE_EMPTY) {
       continue;
     }
 
-    int f = packet.forwardSpeed;
-    int r = packet.rightSpeed;
-    int v = packet.verticalSpeed;
-    int t = packet.turnSpeed;
-    int b = packet.button;
-    printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
+    // int f = packet.forwardSpeed;
+    // int r = packet.rightSpeed;
+    // int v = packet.verticalSpeed;
+    // int t = packet.turnSpeed;
+    // int b = packet.button;
+    // printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
 
     err = NRF_push_packet(&radio, (const uint8_t *)&packet, sizeof(packet)); // verify use of sizeof is correct
     assert(err != NRF_INVALID_PACKET_LEN); 
@@ -120,44 +132,6 @@ void sendDataTask(void *arg) {
     err = NRF_pulse_TXmode(&radio);
     assert(err == DRONE_OK);
 
-    while(1) {
-      // check if theres data in fifo
-
-
-
-      // read status
-      txBuffer[0] = CMD_R_REG | 0x07;
-      txBuffer[1] = CMD_NOP;
-      SPI_transmit(radio.SPI, txBuffer, rxBuffer, 2, 2);
-      
-      // if TX_DS = 1
-      if ((rxBuffer[1] & 0x20) == 0x20) {
-        printf("TX_DS\n");
-        // clear bit
-        txBuffer[0] = CMD_W_REG | 0x07;
-        txBuffer[1] = rxBuffer[1] | 0x20;
-        SPI_transmit(radio.SPI, txBuffer, rxBuffer, 2, 2);
-
-        break;
-      }
-
-      // if MAX_RT = 1
-      if ((rxBuffer[1] & 0x10) == 0x10) {
-        printf("MAX_RT\n");
-        break;
-      }
-
-      // read FIFO_STATUS
-      txBuffer[0] = CMD_R_REG | 0x17;
-      txBuffer[1] = CMD_NOP;
-      SPI_transmit(radio.SPI, txBuffer, rxBuffer, 2, 2);
-
-      // if TX_EMPTY = 1, so when fifo empties
-      if ((rxBuffer[1] & 0x10) == 0x10) {
-        printf("TX_EMPTY\n");
-        break;
-      }
-    }
 
     vTaskDelay(pdMS_TO_TICKS(10));
   }
