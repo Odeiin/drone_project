@@ -7,9 +7,9 @@
 #include "drone_err.h"
 
 //GPIO pins
-#define MISO_pin 19
-#define MOSI_pin 23
-#define SCK_pin 18
+#define MISO_PIN 19
+#define MOSI_PIN 23
+#define SCK_PIN 18
 // #define CSN_pin 14
 // #define CE_pin 4
 // #define IRQ_pin 22

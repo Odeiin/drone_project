@@ -24,9 +24,9 @@ spi_device_handle_t SPI_init(uint8_t CSN_PIN) {
   };
 
   spi_bus_config_t busconfig = {
-    .miso_io_num = MISO_pin, 
-    .mosi_io_num = MOSI_pin,
-    .sclk_io_num = SCK_pin,
+    .miso_io_num = MISO_PIN, 
+    .mosi_io_num = MOSI_PIN,
+    .sclk_io_num = SCK_PIN,
     .quadwp_io_num = -1,
     .quadhd_io_num = -1,
     .max_transfer_sz = 64, // set 0 for default 4092 bytes 
@@ -70,6 +70,16 @@ drone_err_t NRF_init(NRF_handle_t *radio, uint8_t CE_PIN, uint8_t CSN_PIN, uint8
   if (err) {
     return err;
   }
+
+  // need to init IRQ later as input if its used
+  gpio_config_t io_conf = {
+    .pin_bit_mask = (1ULL << CE_PIN),      // Select GPIO 2
+    .mode = GPIO_MODE_OUTPUT,            // Set as output
+    .pull_up_en = GPIO_PULLUP_DISABLE,  // Disable pull-up
+    .pull_down_en = GPIO_PULLDOWN_DISABLE,  // Disable pull-down
+    .intr_type = GPIO_INTR_DISABLE             // Disable interrupts
+  };
+  gpio_config(&io_conf);
 
   // setting initial values
   uint8_t txBuffer[2];
@@ -221,7 +231,7 @@ drone_err_t NRF_set_channel(NRF_handle_t *radio, NRF_channel_t RF_CH) {
   return DRONE_OK;
 }
 
-// maybe return ints for error codes
+
 drone_err_t NRF_enter_power_down(NRF_handle_t *radio) {
   if (radio->state == powerDown) {
     return DRONE_OK;
@@ -455,7 +465,6 @@ drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, size_t p
   return DRONE_OK;
 }
 
-// maybe just make do max size then caller can handle 
 // the receiver should be expecting a standard packet size so I thought it made sense to pass in a packet size 
 drone_err_t NRF_read_Fifo(NRF_handle_t *radio, uint8_t *packet, size_t packetLength) {
   if (packetLength > MAX_PACKET_SIZE || packetLength == 0) {
@@ -494,5 +503,3 @@ drone_err_t NRF_flush_TX(NRF_handle_t *radio) {
 
   return DRONE_OK;
 }
-
-
