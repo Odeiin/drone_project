@@ -17,6 +17,7 @@
 #include "NRF24L01.h"
 #include "joysticks.h"
 #include "control_protocol.h"
+#include "MPU6050.h"
 
 #include "drone_err.h"
 #include "NRF_err.h"
@@ -33,15 +34,32 @@ void app_main(void)
 
   // NRF needs 100ms to settle, id seen waiting longer somewhere, cant hurt
   vTaskDelay(pdMS_TO_TICKS(1000)); 
+  xTaskCreate(imuTask, "IMU task", 8192, NULL, 1, NULL); // not sure about mem size
+  // xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
+}
 
-  xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
+void imuTask(void *arg) {
+  MPU_handle_t imu;
+  MPU_init(&imu);
+
+  accel_data_t accelData;
+  gyro_data_t gyroData;
+
+  for (;;) {
+    drone_err_t err = MPU_read_accel(&imu, &accelData);
+    err = MPU_read_gyro(&imu, &gyroData);
+    assert(err == DRONE_OK);
+
+    printf("accel data: %d, %d, %d\n", accelData.accel_x, accelData.accel_y, accelData.accel_z);
+    //printf("gyro data: %d, %d, %d\n", gyroData.gyro_x, gyroData.gyro_y, gyroData.gyro_z);
+  }
 }
 
 
 void getDataTask(void *arg) {
-  uint8_t ce_pin = 4;
-  uint8_t csn_pin = 14;
-  uint8_t irq_pin = 22;
+  const uint8_t ce_pin = 4;
+  const uint8_t csn_pin = 14;
+  const uint8_t irq_pin = 22;
 
   NRF_addr_t rxAddr = {0x1A, 0x1A, 0x1A, 0x1A, 0x1A};
   NRF_addr_t txAddr = {0x50, 0x50, 0x50, 0x50, 0x50};

@@ -12,6 +12,7 @@
 // RTOS task, receives data from radio
 void getDataTask(void *arg);
 
-
+// RTOS task, gets data from inertial measurement unit (IMU), should read and filter data for use when controlling flight
+void imuTask(void *arg);
 
 // --------------- TASKS ----------------------

@@ -7,23 +7,23 @@
 #include "drone_err.h"
 
 //GPIO pins
-#define MISO_PIN 19
-#define MOSI_PIN 23
-#define SCK_PIN 18
+#define MISO_PIN 	19
+#define MOSI_PIN 	23
+#define SCK_PIN 	18
 // #define CSN_pin 14
 // #define CE_pin 4
 // #define IRQ_pin 22
 
 // NRF24L01 command set
-#define CMD_R_REG 0x00 // OR'd with 0b 000A AAAA where A is the reg address
-#define CMD_W_REG 0x20 // OR'd with 0b 000A AAAA where A is the reg address
-#define CMD_R_RX_PAYLOAD 0x61
-#define CMD_W_TX_PAYLOAD 0xA0
-#define CMD_FLUSH_TX 0xA0
-#define CMD_FLUSH_TX 0xA0
-#define CMD_NOP 0xFF
+#define CMD_R_REG 			0x00 // OR'd with 0b 000A AAAA where A is the reg address
+#define CMD_W_REG 			0x20 // OR'd with 0b 000A AAAA where A is the reg address
+#define CMD_R_RX_PAYLOAD 	0x61
+#define CMD_W_TX_PAYLOAD 	0xA0
+#define CMD_FLUSH_TX 		0xA0
+#define CMD_FLUSH_TX 		0xA0
+#define CMD_NOP 			0xFF
 
-#define MAX_PACKET_SIZE 32
+#define MAX_PACKET_SIZE 	32
 // #define PACKET_SIZE sizeof(ControlData_t)
 
 // radio addresses are stored as an array of 5 uint8_t
