@@ -40,18 +40,40 @@ void app_main(void)
 
 void imuTask(void *arg) {
   MPU_handle_t imu;
-  MPU_init(&imu);
+  drone_err_t err;
+   MPU_init(&imu);
+  // incase theres errors just stays in the loop until init is done, maybe change
+  while(1) {
+    vTaskDelay(pdMS_TO_TICKS(10));
+    drone_err_t err = MPU_set_DLPF(&imu, 5);
+    if (err != DRONE_OK) continue;
+    err = MPU_set_gyro_range(&imu, 1);
+    if (err != DRONE_OK) continue;
+    err = MPU_set_accel_range(&imu, 2);
+    if (err != DRONE_OK) continue;
+    err = MPU_gyro_calibrate(&imu);
+    if (err != DRONE_OK) continue;
+    break;
+  }
 
   accel_data_t accelData;
   gyro_data_t gyroData;
 
   for (;;) {
-    drone_err_t err = MPU_read_accel(&imu, &accelData);
+    err = MPU_read_accel(&imu, &accelData);
     err = MPU_read_gyro(&imu, &gyroData);
-    assert(err == DRONE_OK);
+  
+    angle_data_t accelAngles;
+    MPU_accel_calc_angles(&imu, &accelData, &accelAngles);
 
-    printf("accel data: %d, %d, %d\n", accelData.accel_x, accelData.accel_y, accelData.accel_z);
+    // accelData.accel_x = accelData.accel_x / 4096;
+    // accelData.accel_y = accelData.accel_y / 4096;
+    // accelData.accel_z = accelData.accel_z / 4096;
+
+    printf("angle data: %f, %f\n", accelAngles.roll, accelAngles.pitch);
+    //printf("accel data: %d, %d, %d\n", accelData.accel_x, accelData.accel_y, accelData.accel_z);
     //printf("gyro data: %d, %d, %d\n", gyroData.gyro_x, gyroData.gyro_y, gyroData.gyro_z);
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 

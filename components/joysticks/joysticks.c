@@ -82,13 +82,13 @@ drone_err_t init_joysticks(joystick_handle_t *joysticks) {
 drone_err_t joysticks_calibrate(joystick_handle_t *joysticks) {
   int val;
   // store a list of joystick value for processing
-  static int16_t vertical_vals[CALIBRATION_SAMPLES]; // static to minimize stack usage
-  static int16_t forward_vals[CALIBRATION_SAMPLES];
-  static int16_t right_vals[CALIBRATION_SAMPLES];
-  static int16_t turn_vals[CALIBRATION_SAMPLES];
+  static int16_t vertical_vals[JOYSTICK_CALIBRATION_SAMPLES]; // static to minimize stack usage
+  static int16_t forward_vals[JOYSTICK_CALIBRATION_SAMPLES];
+  static int16_t right_vals[JOYSTICK_CALIBRATION_SAMPLES];
+  static int16_t turn_vals[JOYSTICK_CALIBRATION_SAMPLES];
 
   // get samples
-  for (int i = 0; i < CALIBRATION_SAMPLES; i++) {
+  for (int i = 0; i < JOYSTICK_CALIBRATION_SAMPLES; i++) {
     esp_err_t err = adc_oneshot_read(joysticks->adc, rightStickY, &val);
     if (err != ESP_OK) {
       return JOYSTICK_READ_FAIL;
@@ -117,16 +117,16 @@ drone_err_t joysticks_calibrate(joystick_handle_t *joysticks) {
   }
 
   // sort arrays
-  qsort(vertical_vals, CALIBRATION_SAMPLES, sizeof(vertical_vals[0]), cmp_i16);
-  qsort(forward_vals, CALIBRATION_SAMPLES, sizeof(forward_vals[0]), cmp_i16);
-  qsort(right_vals, CALIBRATION_SAMPLES, sizeof(right_vals[0]), cmp_i16);
-  qsort(turn_vals, CALIBRATION_SAMPLES, sizeof(turn_vals[0]), cmp_i16);
+  qsort(vertical_vals, JOYSTICK_CALIBRATION_SAMPLES, sizeof(vertical_vals[0]), cmp_i16);
+  qsort(forward_vals, JOYSTICK_CALIBRATION_SAMPLES, sizeof(forward_vals[0]), cmp_i16);
+  qsort(right_vals, JOYSTICK_CALIBRATION_SAMPLES, sizeof(right_vals[0]), cmp_i16);
+  qsort(turn_vals, JOYSTICK_CALIBRATION_SAMPLES, sizeof(turn_vals[0]), cmp_i16);
 
   // joystick centered around median value
-  joysticks->center_vertical = vertical_vals[CALIBRATION_SAMPLE_CENTER];
-  joysticks->center_forward = forward_vals[CALIBRATION_SAMPLE_CENTER];
-  joysticks->center_right = right_vals[CALIBRATION_SAMPLE_CENTER];
-  joysticks->center_turn = turn_vals[CALIBRATION_SAMPLE_CENTER];
+  joysticks->center_vertical = vertical_vals[JOYSTICK_CALIBRATION_SAMPLE_CENTER];
+  joysticks->center_forward = forward_vals[JOYSTICK_CALIBRATION_SAMPLE_CENTER];
+  joysticks->center_right = right_vals[JOYSTICK_CALIBRATION_SAMPLE_CENTER];
+  joysticks->center_turn = turn_vals[JOYSTICK_CALIBRATION_SAMPLE_CENTER];
   return DRONE_OK;
 }
 
@@ -141,28 +141,28 @@ drone_err_t readControls(joystick_handle_t *joysticks) {
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
-  joystickData.verticalSpeed = applyDeadzone(raw - joysticks->center_vertical, DEADZONE);
+  joystickData.verticalSpeed = applyDeadzone(raw - joysticks->center_vertical, JOYSTICK_DEADZONE);
 
   // right stick left/right
   err = adc_oneshot_read(joysticks->adc, rightStickX, &raw);
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
-  joystickData.turnSpeed = applyDeadzone(raw - joysticks->center_turn, DEADZONE);
+  joystickData.turnSpeed = applyDeadzone(raw - joysticks->center_turn, JOYSTICK_DEADZONE);
 
   // left stick up/down
   err = adc_oneshot_read(joysticks->adc, leftStickY, &raw);
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
-  joystickData.forwardSpeed = applyDeadzone(raw - joysticks->center_forward, DEADZONE);
+  joystickData.forwardSpeed = applyDeadzone(raw - joysticks->center_forward, JOYSTICK_DEADZONE);
 
   // left stick left/right
   err = adc_oneshot_read(joysticks->adc, leftStickX, &raw);
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
-  joystickData.rightSpeed = applyDeadzone(raw - joysticks->center_right, DEADZONE);
+  joystickData.rightSpeed = applyDeadzone(raw - joysticks->center_right, JOYSTICK_DEADZONE);
 
   // currently no button on controller
   joystickData.button = 0;

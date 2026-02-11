@@ -11,12 +11,7 @@
 
 #define I2C_TIMEOUT_MS		1000
 
-
-typedef struct{
-	i2c_master_bus_handle_t bus_handle;
-	i2c_master_dev_handle_t dev_handle;
-
-} MPU_handle_t;
+#define MPU_CALIBRATION_SAMPLES 100
 
 typedef struct{
 	int16_t accel_x;
@@ -30,6 +25,18 @@ typedef struct{
 	int16_t gyro_z;
 } gyro_data_t;
 
+typedef struct{
+	i2c_master_bus_handle_t bus_handle;
+	i2c_master_dev_handle_t dev_handle;
+	gyro_data_t gyro_calibration_vals;
+	accel_data_t accel_calibration_vals;
+} MPU_handle_t;
+
+typedef struct{
+	float roll;
+	float pitch;
+} angle_data_t;
+
 
 void MPU_init(MPU_handle_t *imu);
 
@@ -39,8 +46,22 @@ drone_err_t MPU_write_byte(MPU_handle_t *imu, uint8_t reg_addr, uint8_t data);
 
 drone_err_t MPU_write_multi_buffer(MPU_handle_t *imu, i2c_master_transmit_multi_buffer_info_t *data, size_t array_len);
 
+drone_err_t MPU_raw_accel(MPU_handle_t *imu, accel_data_t *data);
+
+drone_err_t MPU_raw_gyro(MPU_handle_t *imu, gyro_data_t *data);
+
+drone_err_t MPU_wakeup(MPU_handle_t *imu);
+
+drone_err_t MPU_set_DLPF(MPU_handle_t *imu, uint8_t DLPF_CFG);
+
+drone_err_t MPU_set_gyro_range(MPU_handle_t *imu, uint8_t FS_SEL);
+
+drone_err_t MPU_set_accel_range(MPU_handle_t *imu, uint8_t AFS_SEL);
+
+drone_err_t MPU_gyro_calibrate(MPU_handle_t *imu);
+
 drone_err_t MPU_read_accel(MPU_handle_t *imu, accel_data_t *data);
 
 drone_err_t MPU_read_gyro(MPU_handle_t *imu, gyro_data_t *data);
 
-drone_err_t MPU_wakeup(MPU_handle_t *imu);
+void MPU_accel_calc_angles(MPU_handle_t *imu, accel_data_t *data, angle_data_t *angles);

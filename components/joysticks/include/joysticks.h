@@ -15,9 +15,9 @@
 #include "esp_err.h"
 
 //#define CENTER 2048
-#define CALIBRATION_SAMPLES 101 // odd number for eas as im finding median
-#define CALIBRATION_SAMPLE_CENTER 51
-#define DEADZONE 100
+#define JOYSTICK_CALIBRATION_SAMPLES 101 // odd number for eas as im finding median
+#define JOYSTICK_CALIBRATION_SAMPLE_CENTER 51
+#define JOYSTICK_DEADZONE 100
 
 // joystick ADC1 inputs
 extern const adc_channel_t leftStickX; // left/right

@@ -11,11 +11,12 @@ https://core-electronics.com.au/attachments/localcontent/MPU-6050_DataSheet_V34_
 esp idf I2C examples
 https://github.com/espressif/esp-idf/blob/master/examples/peripherals/i2c/i2c_basic/main/i2c_basic_example_main.c
 
+
+
 https://www.youtube.com/watch?v=Snp6iTu1R7E
 
+https://www.youtube.com/watch?v=7VW_XVbtu9k
 
-notes:
-    - i think sample rate defined reg 25 and 26
-        - Sample Rate = Gyroscope Output Rate / (1 + SMPLRT_DIV)
+
 
     
