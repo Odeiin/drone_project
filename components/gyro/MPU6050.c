@@ -14,7 +14,9 @@
 #include "MPU_err.h"
 #include "esp_err.h"
 
-void MPU_init(MPU_handle_t *imu) 
+
+// initialises handles for I2C communication, necessary to set accel and gyro ranges during initialisation
+drone_err_t MPU_init(MPU_handle_t *imu, uint8_t FS_SEL, uint8_t AFS_SEL) 
 {
 	i2c_master_bus_handle_t bus_handle; 
 	i2c_master_dev_handle_t dev_handle;
@@ -40,11 +42,27 @@ void MPU_init(MPU_handle_t *imu)
 	
 	imu->bus_handle = bus_handle;
 	imu->dev_handle = dev_handle;
+	imu->gyro_calibration_vals = (gyro_data_t){0};
+	imu->accel_calibration_vals = (accel_data_t){0};
 
-	MPU_wakeup(imu);
+	drone_err_t drone_err = MPU_wakeup(imu);
+	if (drone_err != DRONE_OK) {
+		return drone_err;
+	}
+	vTaskDelay(pdMS_TO_TICKS(50)); // wait for wakeup a bit
+	drone_err = MPU_set_gyro_range(imu, FS_SEL);
+	if (drone_err != DRONE_OK) {
+		return drone_err;
+	}
+	drone_err = MPU_set_accel_range(imu, AFS_SEL);
+	if (drone_err != DRONE_OK) {
+		return drone_err;
+	}
+
+	return DRONE_OK;
 }
 
-
+// reads data from MPU registers 
 drone_err_t MPU_read(MPU_handle_t *imu, uint8_t reg_addr, uint8_t *data, size_t len) 
 {
 	esp_err_t err = i2c_master_transmit_receive(imu->dev_handle, &reg_addr, 1, data, len, I2C_TIMEOUT_MS);
@@ -54,7 +72,7 @@ drone_err_t MPU_read(MPU_handle_t *imu, uint8_t reg_addr, uint8_t *data, size_t 
 	return I2C_FAIL;
 }
 
-
+// writes 1 byte of data to a register
 drone_err_t MPU_write_byte(MPU_handle_t *imu, uint8_t reg_addr, uint8_t data) 
 {
 	uint8_t write_buf[2] = {reg_addr, data};
@@ -65,6 +83,7 @@ drone_err_t MPU_write_byte(MPU_handle_t *imu, uint8_t reg_addr, uint8_t data)
 	return I2C_FAIL;
 }
 
+// writes a buffer to register
 // kinda expects the reg_addr to be put in the buffer unlike MPU_write_byte
 drone_err_t MPU_write_multi_buffer(MPU_handle_t *imu, i2c_master_transmit_multi_buffer_info_t *data, size_t array_len) 
 {
@@ -75,7 +94,7 @@ drone_err_t MPU_write_multi_buffer(MPU_handle_t *imu, i2c_master_transmit_multi_
 	return I2C_FAIL;
 }
 
-
+// reads the accelerometer data from registers 59 - 64, the data is the acceleration in the x, y and z direction
 drone_err_t MPU_raw_accel(MPU_handle_t *imu, accel_data_t *data) 
 {
 	uint8_t buf[6];
@@ -91,6 +110,7 @@ drone_err_t MPU_raw_accel(MPU_handle_t *imu, accel_data_t *data)
 	return DRONE_OK;
 }
 
+// reads the gyro data from registers 67 - 72, the data is the angular velocity in the x, y and z direction
 drone_err_t MPU_raw_gyro(MPU_handle_t *imu, gyro_data_t *data) 
 {
 	uint8_t buf[6];
@@ -106,6 +126,7 @@ drone_err_t MPU_raw_gyro(MPU_handle_t *imu, gyro_data_t *data)
 	return DRONE_OK;
 }
 
+// wakes up the MPU from sleep mode, currently just sets reg 107 -> 0
 drone_err_t MPU_wakeup(MPU_handle_t *imu)
 {
 	// uint8_t buf;
@@ -129,7 +150,8 @@ drone_err_t MPU_wakeup(MPU_handle_t *imu)
 	return DRONE_OK;
 } 
 
-// read data sheet for DLPF_CFG value descriptions
+// configures the Digital Low Pass Filter (DLPF) for the gyroscope and accelerometer
+// currently just have to read data sheet for DLPF_CFG value descriptions
 // need to use a lowpass filter to eliminate alot of the noise that occurs from the vibrations of motors on the drone for example
 drone_err_t MPU_set_DLPF(MPU_handle_t *imu, uint8_t DLPF_CFG)
 {
@@ -152,15 +174,40 @@ drone_err_t MPU_set_DLPF(MPU_handle_t *imu, uint8_t DLPF_CFG)
 	return DRONE_OK;
 } 
 
-
+// sets the range of gyroscope values
+// higher range means more sensitive but less saturation 
 drone_err_t MPU_set_gyro_range(MPU_handle_t *imu, uint8_t FS_SEL)
 {
 	if (FS_SEL > 3) {
 		return MPU_INVALID_ARG;
 	}
 
+	// tracks range values in MPU_handle 
+	switch (FS_SEL)
+	{
+	case 0:
+		imu->gyro_range = 250;
+		imu->gyro_sensitivity = 131;
+		break;
+
+	case 1:
+		imu->gyro_range = 500;
+		imu->gyro_sensitivity = 65.5;
+		break;
+
+	case 2:
+		imu->gyro_range = 1000;
+		imu->gyro_sensitivity = 32.8;
+		break;
+	
+	default:
+		imu->gyro_range = 2000;
+		imu->gyro_sensitivity = 16.4;
+		break;
+	}
+
 	uint8_t buf;
-	drone_err_t err = MPU_read(imu, 27, &buf, 1); // read CONFIG
+	drone_err_t err = MPU_read(imu, 27, &buf, 1);
 	if (err != DRONE_OK) {
 		return err;
 	}
@@ -174,15 +221,41 @@ drone_err_t MPU_set_gyro_range(MPU_handle_t *imu, uint8_t FS_SEL)
 	return DRONE_OK;
 }
 
-
+// sets the range of accelerometer values
+// currently just have to read data sheet for AFS_SEL value descriptions
+// higher range means more sensitive but less saturation  
 drone_err_t MPU_set_accel_range(MPU_handle_t *imu, uint8_t AFS_SEL)
 {
 	if (AFS_SEL > 3) {
 		return MPU_INVALID_ARG;
 	}
 
+	// tracks range values in MPU_handle 
+	switch (AFS_SEL)
+	{
+	case 0:
+		imu->accel_range = 2;
+		imu->accel_sensitivity = 16384;
+		break;
+
+	case 1:
+		imu->accel_range = 4;
+		imu->accel_sensitivity = 8192;
+		break;
+
+	case 2:
+		imu->accel_range = 8;
+		imu->accel_sensitivity = 4096;
+		break;
+	
+	default:
+		imu->accel_range = 16;
+		imu->accel_sensitivity = 2048;
+		break;
+	}
+
 	uint8_t buf;
-	drone_err_t err = MPU_read(imu, 28, &buf, 1); // read CONFIG
+	drone_err_t err = MPU_read(imu, 28, &buf, 1);
 	if (err != DRONE_OK) {
 		return err;
 	}
@@ -196,7 +269,8 @@ drone_err_t MPU_set_accel_range(MPU_handle_t *imu, uint8_t AFS_SEL)
 	return DRONE_OK;
 }
 
-
+// calibrates the gyroscope by finding average values over a span of time
+// expects the IMU to be still during calibration
 drone_err_t MPU_gyro_calibrate(MPU_handle_t *imu)
 {
 	gyro_data_t gyro_data;
@@ -226,41 +300,124 @@ drone_err_t MPU_gyro_calibrate(MPU_handle_t *imu)
 	return DRONE_OK;
 }
 
-// this function is dumb so far, accel should be calibrated and then modify this function similar to the gyro one
-drone_err_t MPU_read_accel(MPU_handle_t *imu, accel_data_t *data) 
+// calibrates the accelerometer but finding average values over a span of time
+// expects the IMU to be still during calibration, assumes the Z direction is down
+drone_err_t MPU_accel_calibrate(MPU_handle_t *imu)
 {
-	drone_err_t err = MPU_raw_accel(imu, data);
+	accel_data_t accel_data;
+
+	int64_t accel_x_total = 0;
+	int64_t accel_y_total = 0;
+	int64_t accel_z_total = 0;
+	// collect 100 values
+	for (int i = 0; i < MPU_CALIBRATION_SAMPLES; i++) {
+		drone_err_t err = MPU_raw_accel(imu, &accel_data);
 		if (err != DRONE_OK) {
-		return err;
+			return err;
+		}
+			
+		accel_x_total += accel_data.accel_x;
+		accel_y_total += accel_data.accel_y;
+		accel_z_total += accel_data.accel_z;
+
+		vTaskDelay(pdMS_TO_TICKS(10));
 	}
+
+	// find averages and set calibration values
+	imu->accel_calibration_vals.accel_x = accel_x_total/MPU_CALIBRATION_SAMPLES;
+	imu->accel_calibration_vals.accel_y = accel_y_total/MPU_CALIBRATION_SAMPLES;
+	imu->accel_calibration_vals.accel_z = accel_z_total/MPU_CALIBRATION_SAMPLES - imu->accel_sensitivity; // calibrated so 1g at rest
 
 	return DRONE_OK;
 }
 
+// reads gyro values and adjusts values according to calibration
 drone_err_t MPU_read_gyro(MPU_handle_t *imu, gyro_data_t *data) 
 {
-	// adjusts values according to calibration
 	drone_err_t err = MPU_raw_gyro(imu, data);
 	if (err != DRONE_OK) {
 		return err;
 	}
-	data->gyro_x -= imu->gyro_calibration_vals.gyro_x;
+	data->gyro_x -= imu->gyro_calibration_vals.gyro_x; // adjust values according to calibration
 	data->gyro_y -= imu->gyro_calibration_vals.gyro_y;
 	data->gyro_z -= imu->gyro_calibration_vals.gyro_z;
+
+	data->gyro_x = data->gyro_x / imu->gyro_sensitivity; // convert to degrees
+	data->gyro_y = data->gyro_y / imu->gyro_sensitivity;
+	data->gyro_z = data->gyro_z / imu->gyro_sensitivity;
+
+	return DRONE_OK;
+}
+
+// reads accel values and adjusts values according to calibration
+drone_err_t MPU_read_accel(MPU_handle_t *imu, accel_data_t *data) 
+{
+	// adjusts values according to calibration
+	drone_err_t err = MPU_raw_accel(imu, data);
+	if (err != DRONE_OK) {
+		return err;
+	}
+	data->accel_x -= imu->accel_calibration_vals.accel_x;
+	data->accel_y -= imu->accel_calibration_vals.accel_y;
+	data->accel_z -= imu->accel_calibration_vals.accel_z;
 
 	return DRONE_OK;
 }
 
 
-void MPU_accel_calc_angles(MPU_handle_t *imu, accel_data_t *data, angle_data_t *angles) 
+drone_err_t MPU_accel_calc_angles(MPU_handle_t *imu, angle_data_t *angles) 
 {
-	float accel_x = (float)data->accel_x / 4096; // convert to g's
-	float accel_y = (float)data->accel_y / 4096;
-	float accel_z = (float)data->accel_z / 4096;
+	accel_data_t accelData;
+	drone_err_t err = MPU_read_accel(imu, &accelData);
+	if (err != DRONE_OK) {
+		return err;
+	}   
 
-	float roll = atan(accel_y/sqrt(accel_x * accel_x + accel_z * accel_z)) * 1/(3.1415927/180); // calc angle, convert to degrees at the end
-	float pitch = -atan(accel_x/sqrt(accel_y * accel_y + accel_z * accel_z)) * 1/(3.1415927/180);
+	float accel_x = (float)accelData.accel_x / imu->accel_sensitivity; // convert to g's
+	float accel_y = (float)accelData.accel_y / imu->accel_sensitivity;
+	float accel_z = (float)accelData.accel_z / imu->accel_sensitivity;
+
+	float roll = atan(accel_y/sqrt(accel_x * accel_x + accel_z * accel_z))* (180.0f / M_PI); // calc angle, convert to degrees at the end
+	float pitch = -atan(accel_x/sqrt(accel_y * accel_y + accel_z * accel_z)) * (180.0f / M_PI);
 
 	angles->roll = roll;
 	angles->pitch = pitch;
+
+	return DRONE_OK;
+}
+
+// expects previous angle data and change in time (dt) and will give current angle data
+drone_err_t MPU_gyro_calc_angles(MPU_handle_t *imu, angle_data_t *prev_angles, angle_data_t *angle_data, float dt) 
+{
+	gyro_data_t gyroData;
+	drone_err_t err = MPU_read_gyro(imu, &gyroData);
+	if (err != DRONE_OK) {
+		return err;
+	} 
+
+	angle_data->roll = prev_angles->roll + (gyroData.gyro_x * dt);
+	angle_data->pitch = prev_angles->pitch + (gyroData.gyro_y * dt);
+	return DRONE_OK;
+}
+
+
+drone_err_t MPU_complementary_filter(MPU_handle_t *imu, angle_data_t *prev_angles, angle_data_t *angle_data, float dt) 
+{
+  angle_data_t accelAngles;
+  angle_data_t gyroAngles;
+
+	drone_err_t err = MPU_gyro_calc_angles(imu, prev_angles, &gyroAngles, dt);
+	if (err != DRONE_OK) {
+		return err;
+	} 
+
+	err = MPU_accel_calc_angles(imu, &accelAngles);
+	if (err != DRONE_OK) {
+		return err;
+	}
+	
+	angle_data->roll = ((MPU_FILTER_FRACTION) * gyroAngles.roll) + ((1 - MPU_FILTER_FRACTION) * accelAngles.roll);
+	angle_data->pitch = ((MPU_FILTER_FRACTION) * gyroAngles.pitch) + ((1 - MPU_FILTER_FRACTION) * accelAngles.pitch);
+	
+	return DRONE_OK;
 }

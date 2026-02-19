@@ -12,6 +12,7 @@
 
 #include "esp_adc/adc_oneshot.h"
 #include "hal/adc_types.h"
+#include "esp_timer.h"
 
 #include "drone_receiverV1.h"
 #include "NRF24L01.h"
@@ -29,56 +30,53 @@
 // --------- globals -------------------------------
 
 
-void app_main(void)
-{
+void app_main(void) {
 
   // NRF needs 100ms to settle, id seen waiting longer somewhere, cant hurt
   vTaskDelay(pdMS_TO_TICKS(1000)); 
-  xTaskCreate(imuTask, "IMU task", 8192, NULL, 1, NULL); // not sure about mem size
-  // xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
+  xTaskCreate(imuTask, "IMU task", 8192, NULL, 1, NULL); // not sure about mem size, more than this needs though
+  xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
 }
 
-void imuTask(void *arg) {
+void imuTask(void *arg) 
+{
   MPU_handle_t imu;
-  drone_err_t err;
-   MPU_init(&imu);
   // incase theres errors just stays in the loop until init is done, maybe change
   while(1) {
     vTaskDelay(pdMS_TO_TICKS(10));
-    drone_err_t err = MPU_set_DLPF(&imu, 5);
+    drone_err_t err = MPU_init(&imu, 1, 2);
     if (err != DRONE_OK) continue;
-    err = MPU_set_gyro_range(&imu, 1);
-    if (err != DRONE_OK) continue;
-    err = MPU_set_accel_range(&imu, 2);
+    err = MPU_set_DLPF(&imu, 5);
     if (err != DRONE_OK) continue;
     err = MPU_gyro_calibrate(&imu);
+    if (err != DRONE_OK) continue;
+    err = MPU_accel_calibrate(&imu);
     if (err != DRONE_OK) continue;
     break;
   }
 
-  accel_data_t accelData;
-  gyro_data_t gyroData;
+  angle_data_t filterAngles = (angle_data_t){0};
 
+  int64_t t1 = esp_timer_get_time();
+  int64_t t2 = esp_timer_get_time();
   for (;;) {
-    err = MPU_read_accel(&imu, &accelData);
-    err = MPU_read_gyro(&imu, &gyroData);
-  
-    angle_data_t accelAngles;
-    MPU_accel_calc_angles(&imu, &accelData, &accelAngles);
-
-    // accelData.accel_x = accelData.accel_x / 4096;
-    // accelData.accel_y = accelData.accel_y / 4096;
-    // accelData.accel_z = accelData.accel_z / 4096;
-
-    printf("angle data: %f, %f\n", accelAngles.roll, accelAngles.pitch);
-    //printf("accel data: %d, %d, %d\n", accelData.accel_x, accelData.accel_y, accelData.accel_z);
-    //printf("gyro data: %d, %d, %d\n", gyroData.gyro_x, gyroData.gyro_y, gyroData.gyro_z);
+    drone_err_t err;
+    t2 = esp_timer_get_time(); // time at new angle calculation
+    float dt = (t2 - t1) * 1e-6f; // time in seconds
+    err = MPU_complementary_filter(&imu, &filterAngles, &filterAngles, dt);
+    if (err != DRONE_OK) {
+      printf("err\n"); // not really handling yet
+    }
+    t1 = t2; // time of latest angle data
+    
+    //printf("filter angles: %f, %f \n", filterAngles.roll, filterAngles.pitch);
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 
 
-void getDataTask(void *arg) {
+void getDataTask(void *arg) 
+{
   const uint8_t ce_pin = 4;
   const uint8_t csn_pin = 14;
   const uint8_t irq_pin = 22;
@@ -127,4 +125,5 @@ void getDataTask(void *arg) {
 }
 
 
+ 
 

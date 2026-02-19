@@ -13,6 +13,8 @@
 
 #define MPU_CALIBRATION_SAMPLES 100
 
+#define MPU_FILTER_FRACTION 0.98 // must be a value between 0 and 1, this value represents the filter fraction for the gyro
+
 typedef struct{
 	int16_t accel_x;
 	int16_t accel_y;
@@ -20,9 +22,9 @@ typedef struct{
 } accel_data_t;
 
 typedef struct{
-	int16_t gyro_x;
-	int16_t gyro_y;
-	int16_t gyro_z;
+	int16_t gyro_x; // roll 
+	int16_t gyro_y; // pitch
+	int16_t gyro_z; // yaw
 } gyro_data_t;
 
 typedef struct{
@@ -30,6 +32,10 @@ typedef struct{
 	i2c_master_dev_handle_t dev_handle;
 	gyro_data_t gyro_calibration_vals;
 	accel_data_t accel_calibration_vals;
+	uint8_t accel_range; // +-g's
+	int16_t gyro_range; // +- degrees/s
+	int16_t accel_sensitivity; // LSB/g
+	float gyro_sensitivity; // LSB/ degrees/s
 } MPU_handle_t;
 
 typedef struct{
@@ -38,7 +44,7 @@ typedef struct{
 } angle_data_t;
 
 
-void MPU_init(MPU_handle_t *imu);
+drone_err_t MPU_init(MPU_handle_t *imu, uint8_t FS_SEL, uint8_t AFS_SEL);
 
 drone_err_t MPU_read(MPU_handle_t *imu, uint8_t reg_addr, uint8_t *data, size_t len);
 
@@ -60,8 +66,14 @@ drone_err_t MPU_set_accel_range(MPU_handle_t *imu, uint8_t AFS_SEL);
 
 drone_err_t MPU_gyro_calibrate(MPU_handle_t *imu);
 
+drone_err_t MPU_accel_calibrate(MPU_handle_t *imu);
+
 drone_err_t MPU_read_accel(MPU_handle_t *imu, accel_data_t *data);
 
 drone_err_t MPU_read_gyro(MPU_handle_t *imu, gyro_data_t *data);
 
-void MPU_accel_calc_angles(MPU_handle_t *imu, accel_data_t *data, angle_data_t *angles);
+drone_err_t MPU_accel_calc_angles(MPU_handle_t *imu, angle_data_t *angles);
+
+drone_err_t MPU_gyro_calc_angles(MPU_handle_t *imu, angle_data_t *prev_angles, angle_data_t *angle_data, float dt);
+
+drone_err_t MPU_complementary_filter(MPU_handle_t *imu, angle_data_t *prev_angles, angle_data_t *angle_data, float dt);

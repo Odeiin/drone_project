@@ -6,4 +6,4 @@ set(EXTRA_COMPONENT_DIRS
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(drone_transmitterV1)
+project(drone_receiverV1)
