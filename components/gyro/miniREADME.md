@@ -17,6 +17,7 @@ https://www.youtube.com/watch?v=Snp6iTu1R7E
 
 https://www.youtube.com/watch?v=7VW_XVbtu9k
 
+// complementary filter is based on this video, in my testing the filter allowed the calculated angle to be alot more accurate than just using either the angle calculated using the gyro or accelerometer
 https://www.youtube.com/watch?v=whSw42XddsU
 
     
