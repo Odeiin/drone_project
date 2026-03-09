@@ -409,8 +409,8 @@ drone_err_t MPU_complementary_filter(MPU_handle_t *imu, angle_data_t *prev_angle
 	drone_err_t err = MPU_gyro_calc_angles(imu, prev_angles, &gyroAngles, dt);
 	if (err != DRONE_OK) {
 		return err;
-	} 
-
+	}
+	
 	err = MPU_accel_calc_angles(imu, &accelAngles);
 	if (err != DRONE_OK) {
 		return err;
