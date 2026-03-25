@@ -8,7 +8,9 @@
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "driver/spi_common.h"
+#include "driver/mcpwm_prelude.h"
 #include "sdkconfig.h"
+#include "esp_log.h"
 
 #include "esp_adc/adc_oneshot.h"
 #include "hal/adc_types.h"
@@ -19,24 +21,118 @@
 #include "joysticks.h"
 #include "control_protocol.h"
 #include "MPU6050.h"
+#include "motor.h"
 
 #include "drone_err.h"
 #include "NRF_err.h"
 
 
 // --------- globals -------------------------------
-
+QueueHandle_t angle_data;
+QueueHandle_t radio_data;
 
 // --------- globals -------------------------------
 
 
 void app_main(void) {
 
+  angle_data = xQueueCreate(1, sizeof(angle_data_t));
+  assert(angle_data != NULL);
+
+  radio_data = xQueueCreate(1, sizeof(ControlData_t));
+  assert(radio_data != NULL);
+
   // NRF needs 100ms to settle, id seen waiting longer somewhere, cant hurt
-  vTaskDelay(pdMS_TO_TICKS(1000)); 
+  //vTaskDelay(pdMS_TO_TICKS(1000)); 
   xTaskCreate(imuTask, "IMU task", 8192, NULL, 1, NULL); // not sure about mem size, more than this needs though
-  xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
+  //xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
+  xTaskCreate(flight_control_task, "test", 8192, NULL, 1, NULL); // not sure about mem size
 }
+
+
+void flight_control_task(void *arg)
+{
+  drone_err_t err;
+
+  drone_motor_controller_t drone = {0};
+  err = drone_motors_init(&drone);
+  if (err != DRONE_OK) {
+    printf("error: %ld", err);
+  }
+  err = drone_motors_calibrate(&drone);
+  if (err != DRONE_OK) {
+    printf("error: %ld", err);
+  }
+
+  // flight control pseduocode
+
+  // vertical component of the thrust is:
+  // Tvert = Ttotal * cos(pitch_angle) * cos(roll_angle)
+  // so to maintain a vertical thrust:
+  // Ttotal = baseline/(cos(pitch_angle) * cos(roll_angle))
+  // where baseline is the thrust from keeping the drone stable +/- the vertical thrust from the controller
+  // this Ttotal = throttle
+  // but this assumes im able to increase or decrease the motor speed by specific amounts
+
+  // roll and pitch corrections will come from the PID angle correction
+
+  // i think perhaps vertical thrust is just going to be manually controlled by the remote controller
+  // i can maybe reasonablly maintain the vertical thrust but ive currently got no real way of sensing the drones vertical position
+  // ill add a barometer later
+  
+
+  // m1 = throttle + roll + pitch - yaw
+  // m2 = throttle - roll + pitch + yaw
+  // m3 = throttle - roll - pitch - yaw
+  // m4 = throttle + roll - pitch + yaw
+
+
+
+  // ----------------------
+  // potentiometer testing pwm
+  
+  // adc_oneshot_unit_handle_t adc;
+
+	// adc_oneshot_unit_init_cfg_t init_config1 = {
+	// 	.unit_id = ADC_UNIT_1,
+	// 	.ulp_mode = ADC_ULP_MODE_DISABLE,
+	// };    
+  // adc_oneshot_new_unit(&init_config1, &adc);
+
+
+  // // config settings
+  // adc_oneshot_chan_cfg_t config = {
+  //   .bitwidth = ADC_BITWIDTH_DEFAULT,
+  //   .atten = ADC_ATTEN_DB_12,
+  // };
+
+  // assert(adc_oneshot_config_channel(adc, ADC_CHANNEL_6, &config) == ESP_OK);
+
+  // // calibration
+  // // set max
+  // motor_set_pulse(&motor, &timebase, 2000);
+  // // wait 3 secs
+  // vTaskDelay(pdMS_TO_TICKS(3000));
+  // // set max
+  // motor_set_pulse(&motor, &timebase, 1000);
+  // // wait 3 secs
+  // vTaskDelay(pdMS_TO_TICKS(3000));
+
+  // int raw;
+  // while(1) {
+  //   adc_oneshot_read(adc, ADC_CHANNEL_6, &raw);
+
+  //   raw = 800 + ((raw * 900) / 4095);
+
+  //   drone_err_t err = motor_set_pulse(&motor, &timebase, (uint16_t)raw);
+  //   printf("%ld\n", err);
+
+  //   vTaskDelay(pdMS_TO_TICKS(10));
+  // }  
+  // ----------------------
+  
+}
+
 
 void imuTask(void *arg) 
 {
@@ -69,6 +165,8 @@ void imuTask(void *arg)
     }
     t1 = t2; // time of latest angle data
     
+    // put data in global (thread safe)
+    xQueueOverwrite(angle_data, &filterAngles); // only the most recent value matters
     //printf("filter angles: %f, %f \n", filterAngles.roll, filterAngles.pitch);
     vTaskDelay(pdMS_TO_TICKS(10));
   }
@@ -110,13 +208,15 @@ void getDataTask(void *arg)
     }
     assert(err == DRONE_OK);
 
-    int f = packet.forwardSpeed;
-    int r = packet.rightSpeed;
-    int v = packet.verticalSpeed;
-    int t = packet.turnSpeed;
-    int b = packet.button;
-    printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);   
-    
+    // put data in global (thread safe)
+    xQueueOverwrite(radio_data, &packet); // only the most recent value matters
+
+    // int f = packet.forwardSpeed;
+    // int r = packet.rightSpeed;
+    // int v = packet.verticalSpeed;
+    // int t = packet.turnSpeed;
+    // int b = packet.button;
+    // printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);   
     
     // handle data if received properly
 

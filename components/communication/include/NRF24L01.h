@@ -56,7 +56,7 @@ typedef enum {
 	MAX		// 0dBm
 } RF_power_level_t;
 
-typedef struct{
+typedef struct {
 	spi_device_handle_t SPI;
 	radioState_t state;
 	uint8_t CE_PIN;

@@ -103,6 +103,7 @@ void sendDataTask(void *arg) {
 
 
     ControlData_t packet;
+    // if queue empty
     if (xQueueReceive(dataQueue, &packet, 0) == errQUEUE_EMPTY) {
       continue;
     }
@@ -144,6 +145,7 @@ void readInputsTask(void *arg) {
     err  = readControls(&joysticks);
     assert(err == DRONE_OK);
 
+    // put data in global (thread safe)
     ControlData_t data = joysticks.data;
     xQueueOverwrite(dataQueue, &data); // only the most recent value matters
 

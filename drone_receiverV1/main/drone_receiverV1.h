@@ -15,4 +15,7 @@ void getDataTask(void *arg);
 // RTOS task, gets data from inertial measurement unit (IMU), should read and filter data for use when controlling flight
 void imuTask(void *arg);
 
+
+void flight_control_task(void *arg);
+
 // --------------- TASKS ----------------------

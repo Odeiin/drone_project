@@ -1,3 +1,5 @@
+#pragma once
+
 #include "driver/i2c_master.h"
 
 #include "drone_err.h"
