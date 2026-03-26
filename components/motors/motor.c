@@ -1,7 +1,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "driver/mcpwm_prelude.h"
+#include "driver/ledc.h"
 
 #include "motor.h"
 #include "MPU6050.h"
@@ -9,108 +9,117 @@
 #include "motor_err.h"
 
 
-drone_err_t pwm_timer_init(pwm_timebase_t *timebase, uint32_t resolution, uint32_t period) 
+drone_err_t motor_init(motor_handle_t *motor, ledc_channel_t channel, uint8_t gpio)
 {
-	mcpwm_timer_handle_t timer_handle = NULL;
-  mcpwm_timer_config_t timer_config = {
-    .group_id = 0,
-    .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
-    .resolution_hz = resolution,
-    .period_ticks = period,
-    .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
+  ledc_channel_config_t ledc_channel = {
+    .speed_mode     = LEDC_MODE,
+    .channel        = channel,
+    .timer_sel      = LEDC_TIMER,
+    .intr_type      = LEDC_INTR_DISABLE,
+    .gpio_num       = gpio,
+    .duty           = 3266,
+    .hpoint         = 0
   };
-  ESP_ERROR_CHECK(mcpwm_new_timer(&timer_config, &timer_handle));
+  ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
-	timebase->timer = timer_handle;
-	timebase->resolution_hz = resolution;
-	timebase->period_ticks = period;
-	// if (err != ESP_OK) {
-	// 	return err;
-	// }
+  motor->channel = channel;
+  motor->gpio = gpio;
 
-	// return ESP_OK;
-	return DRONE_OK;
+  return DRONE_OK;
 }
 
-
-drone_err_t motor_add_operator(motor_handle_t *motor) 
+// intitialises drone_motor_controller_t with motors and timer
+drone_err_t drone_motors_init(drone_motor_controller_t *drone) 
 {
-  mcpwm_oper_handle_t operator = NULL;
-  mcpwm_operator_config_t operator_config = {
-    .group_id = 0,
+  // timer init
+  ledc_timer_config_t ledc_timer = {
+    .speed_mode       = LEDC_MODE,
+    .duty_resolution  = LEDC_DUTY_RES,
+    .timer_num        = LEDC_TIMER,
+    .freq_hz          = LEDC_FREQUENCY,
+    .clk_cfg          = LEDC_AUTO_CLK
   };
+  ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
-  if (motor->operator != NULL) {
-    mcpwm_del_operator(motor->operator);
-    motor->operator = NULL;
+  drone_err_t err;
+  // init motors
+  err = motor_init(&drone->front_right_motor, LEDC_CHANNEL_0, FRONT_RIGHT_MOTOR_PIN);
+  if (err != DRONE_OK) {
+    return err;
   }
-
-  ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &operator));
-  ESP_ERROR_CHECK(mcpwm_operator_connect_timer(operator, motor->timebase->timer));
-
-  motor->operator = operator;
+  err = motor_init(&drone->front_left_motor, LEDC_CHANNEL_1, FRONT_LEFT_MOTOR_PIN);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = motor_init(&drone->back_right_motor, LEDC_CHANNEL_2, BACK_RIGHT_MOTOR_PIN);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = motor_init(&drone->back_left_motor, LEDC_CHANNEL_3, BACK_LEFT_MOTOR_PIN);
+  if (err != DRONE_OK) {
+    return err;
+  }
 
   return DRONE_OK;
 }
 
 
-drone_err_t motor_add_comparator(motor_handle_t *motor) 
+drone_err_t motor_set_pulse(motor_handle_t *motor, uint16_t pulse_us)
 {
-	mcpwm_cmpr_handle_t comparator = NULL;
-  mcpwm_comparator_config_t comparator_config = {
-    .flags.update_cmp_on_tez = true,
-  };
-  ESP_ERROR_CHECK(mcpwm_new_comparator(motor->operator, &comparator_config, &comparator));
-
-	if (motor->comparator != NULL) {
-		mcpwm_del_comparator(motor->comparator);
-	}
-	motor->comparator = comparator;
-	return DRONE_OK;
-}
-
-drone_err_t motor_add_generator(motor_handle_t *motor) 
-{
-	mcpwm_gen_handle_t generator = NULL;
-  mcpwm_generator_config_t generator_config = {
-    .gen_gpio_num = motor->gpio_num,
-  };
-  ESP_ERROR_CHECK(mcpwm_new_generator(motor->operator, &generator_config, &generator));
-
-	if (motor->generator != NULL) {
-		mcpwm_del_generator(motor->generator);
-	}
-	motor->generator = generator;
-	return DRONE_OK;
-}
-
-
-drone_err_t motor_init(motor_handle_t *motor, pwm_timebase_t *timebase, int gpio_num) 
-{
-	motor->timebase = timebase;
-	motor->gpio_num = gpio_num;
-	motor_add_operator(motor);
-	motor_add_comparator(motor); 
-	motor_add_generator(motor);
-
-  // go high on counter empty
-  ESP_ERROR_CHECK(mcpwm_generator_set_action_on_timer_event(motor->generator,
-                                                            MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH)));
-  // go low on compare threshold
-  ESP_ERROR_CHECK(mcpwm_generator_set_action_on_compare_event(motor->generator,
-                                                              MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, motor->comparator, MCPWM_GEN_ACTION_LOW)));
-
-	return DRONE_OK;																														
-}
-
-// pulse length is in ticks
-drone_err_t motor_set_pulse(motor_handle_t *motor, pwm_timebase_t *timebase, uint16_t pulse_length)
-{
-  if ((pulse_length > timebase->period_ticks) || (pulse_length == 0)) {
+  // might change this, to turn the motor off might possibly have to be less than 1000
+  if (pulse_us < 1000 || pulse_us > 2000) {
     return MOTOR_INVALID_PULSE_LEN;
   }
 
-  mcpwm_comparator_set_compare_value(motor->comparator, pulse_length);
+  int duty = (pulse_us * ((1 << LEDC_RES_INT) - 1)) / LEDC_PERIOD_US;
+
+  // set pulse
+  ESP_ERROR_CHECK(ledc_set_duty_and_update(LEDC_MODE, motor->channel, duty, 0));
+  return DRONE_OK;
+}
+
+// ESCs have to calibrated at least once
+drone_err_t drone_motors_calibrate(drone_motor_controller_t *drone) 
+{
+  // set max
+  drone_err_t err;
+  err = motor_set_pulse(&drone->front_right_motor, MOTOR_MAX_PULSE_PERIOD);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = motor_set_pulse(&drone->front_left_motor,MOTOR_MAX_PULSE_PERIOD);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = motor_set_pulse(&drone->back_right_motor, MOTOR_MAX_PULSE_PERIOD);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = motor_set_pulse(&drone->back_left_motor, MOTOR_MAX_PULSE_PERIOD);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  // wait 3 secs
+  vTaskDelay(pdMS_TO_TICKS(3000));
+  // set min
+  err = motor_set_pulse(&drone->front_right_motor, MOTOR_MIN_PULSE_PERIOD);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = motor_set_pulse(&drone->front_left_motor, MOTOR_MIN_PULSE_PERIOD);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = motor_set_pulse(&drone->back_right_motor, MOTOR_MIN_PULSE_PERIOD);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = motor_set_pulse(&drone->back_left_motor, MOTOR_MIN_PULSE_PERIOD);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  // wait 3 secs
+  vTaskDelay(pdMS_TO_TICKS(3000));
 
   return DRONE_OK;
 }
@@ -145,83 +154,3 @@ PID_angle_correction_t PID_angle_calculation(angle_data_t angle_data, angle_data
   return correction;
 }
 
-// ESCs have to calibrated at least once
-drone_err_t drone_motors_calibrate(drone_motor_controller_t *drone) 
-{
-  // set max
-  drone_err_t err;
-  err = motor_set_pulse(&drone->front_right_motor, &drone->timebase, MOTOR_MAX_PULSE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_set_pulse(&drone->front_left_motor, &drone->timebase, MOTOR_MAX_PULSE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_set_pulse(&drone->back_right_motor, &drone->timebase, MOTOR_MAX_PULSE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_set_pulse(&drone->back_left_motor, &drone->timebase, MOTOR_MAX_PULSE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  // wait 3 secs
-  vTaskDelay(pdMS_TO_TICKS(3000));
-  // set min
-  err = motor_set_pulse(&drone->front_right_motor, &drone->timebase, MOTOR_MIN_PULSE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_set_pulse(&drone->front_left_motor, &drone->timebase, MOTOR_MIN_PULSE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_set_pulse(&drone->back_right_motor, &drone->timebase, MOTOR_MIN_PULSE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_set_pulse(&drone->back_left_motor, &drone->timebase, MOTOR_MIN_PULSE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  // wait 3 secs
-  vTaskDelay(pdMS_TO_TICKS(3000));
-
-  return DRONE_OK;
-}
-
-// intitialises drone_motor_controller_t with motors and timer
-drone_err_t drone_motors_init(drone_motor_controller_t *drone) 
-{
-  drone_err_t err;
-  // init timebase
-  err = pwm_timer_init(&drone->timebase, MOTOR_TIMEBASE_RESOLUTION_HZ, MOTOR_TIMEBASE_PERIOD);
-  if (err != DRONE_OK) {
-    return err;
-  }
-
-  // init motors
-  err = motor_init(&drone->front_right_motor, &drone->timebase, FRONT_RIGHT_MOTOR_PIN);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_init(&drone->front_left_motor, &drone->timebase, FRONT_LEFT_MOTOR_PIN);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_init(&drone->back_right_motor, &drone->timebase, BACK_RIGHT_MOTOR_PIN);
-  if (err != DRONE_OK) {
-    return err;
-  }
-  err = motor_init(&drone->back_left_motor, &drone->timebase, BACK_LEFT_MOTOR_PIN);
-  if (err != DRONE_OK) {
-    return err;
-  }
-
-  // enable timer
-  ESP_ERROR_CHECK(mcpwm_timer_enable(drone->timebase.timer));
-  ESP_ERROR_CHECK(mcpwm_timer_start_stop(drone->timebase.timer, MCPWM_TIMER_START_NO_STOP));
-
-  return DRONE_OK;
-}

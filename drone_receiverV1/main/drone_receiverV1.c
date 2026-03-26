@@ -8,7 +8,7 @@
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "driver/spi_common.h"
-#include "driver/mcpwm_prelude.h"
+#include "driver/ledc.h"
 #include "sdkconfig.h"
 #include "esp_log.h"
 
@@ -44,7 +44,7 @@ void app_main(void) {
 
   // NRF needs 100ms to settle, id seen waiting longer somewhere, cant hurt
   //vTaskDelay(pdMS_TO_TICKS(1000)); 
-  xTaskCreate(imuTask, "IMU task", 8192, NULL, 1, NULL); // not sure about mem size, more than this needs though
+  //xTaskCreate(imuTask, "IMU task", 8192, NULL, 1, NULL); // not sure about mem size, more than this needs though
   //xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
   xTaskCreate(flight_control_task, "test", 8192, NULL, 1, NULL); // not sure about mem size
 }
@@ -63,6 +63,38 @@ void flight_control_task(void *arg)
   if (err != DRONE_OK) {
     printf("error: %ld", err);
   }
+
+
+
+
+
+
+
+
+
+  // int num = 1800;
+  // int increment = 10;
+  // while (1) {
+  //   motor_set_pulse(&drone->front_right_motor, num);
+
+  //   if (num >= 1800) {
+  //     increment = -10;
+  //   }
+  //   if (num < 1200) {
+  //     increment = 10;
+  //   }
+
+  //   num = num + increment;
+
+  //   vTaskDelay(pdMS_TO_TICKS(10));
+  // }
+
+
+
+
+
+
+
 
   // flight control pseduocode
 
@@ -89,46 +121,36 @@ void flight_control_task(void *arg)
 
 
   // ----------------------
-  // potentiometer testing pwm
+  //potentiometer testing pwm
   
-  // adc_oneshot_unit_handle_t adc;
+  adc_oneshot_unit_handle_t adc;
 
-	// adc_oneshot_unit_init_cfg_t init_config1 = {
-	// 	.unit_id = ADC_UNIT_1,
-	// 	.ulp_mode = ADC_ULP_MODE_DISABLE,
-	// };    
-  // adc_oneshot_new_unit(&init_config1, &adc);
+	adc_oneshot_unit_init_cfg_t init_config1 = {
+		.unit_id = ADC_UNIT_1,
+		.ulp_mode = ADC_ULP_MODE_DISABLE,
+	};    
+  adc_oneshot_new_unit(&init_config1, &adc);
 
 
-  // // config settings
-  // adc_oneshot_chan_cfg_t config = {
-  //   .bitwidth = ADC_BITWIDTH_DEFAULT,
-  //   .atten = ADC_ATTEN_DB_12,
-  // };
+  // config settings
+  adc_oneshot_chan_cfg_t config = {
+    .bitwidth = ADC_BITWIDTH_DEFAULT,
+    .atten = ADC_ATTEN_DB_12,
+  };
 
-  // assert(adc_oneshot_config_channel(adc, ADC_CHANNEL_6, &config) == ESP_OK);
+  assert(adc_oneshot_config_channel(adc, ADC_CHANNEL_6, &config) == ESP_OK);
 
-  // // calibration
-  // // set max
-  // motor_set_pulse(&motor, &timebase, 2000);
-  // // wait 3 secs
-  // vTaskDelay(pdMS_TO_TICKS(3000));
-  // // set max
-  // motor_set_pulse(&motor, &timebase, 1000);
-  // // wait 3 secs
-  // vTaskDelay(pdMS_TO_TICKS(3000));
+  int raw;
+  while(1) {
+    adc_oneshot_read(adc, ADC_CHANNEL_6, &raw);
 
-  // int raw;
-  // while(1) {
-  //   adc_oneshot_read(adc, ADC_CHANNEL_6, &raw);
+    raw = 1000 + ((raw * 500) / 4095);
 
-  //   raw = 800 + ((raw * 900) / 4095);
+    drone_err_t err = motor_set_pulse(&drone.front_right_motor, (uint16_t)raw);
+    printf("%ld\n", err);
 
-  //   drone_err_t err = motor_set_pulse(&motor, &timebase, (uint16_t)raw);
-  //   printf("%ld\n", err);
-
-  //   vTaskDelay(pdMS_TO_TICKS(10));
-  // }  
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }  
   // ----------------------
   
 }

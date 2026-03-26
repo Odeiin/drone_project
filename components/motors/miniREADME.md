@@ -2,7 +2,7 @@ I was doing motor control using the MCPWM generator but I think theres only 3 MC
 
 recources:
 
-https://github.com/espressif/esp-idf/blob/master/examples/peripherals/mcpwm/mcpwm_bdc_speed_control/main/mcpwm_bdc_control_example_main.c
+https://github.com/espressif/esp-idf/tree/master/examples/peripherals/ledc/ledc_basic
 
 https://www.youtube.com/watch?v=XfAt6hNV8XM
 
