@@ -144,12 +144,13 @@ void flight_control_task(void *arg)
   while(1) {
     adc_oneshot_read(adc, ADC_CHANNEL_6, &raw);
 
-    raw = 1000 + ((raw * 500) / 4095);
+    raw = 900 + ((raw * 500) / 4095);
 
     drone_err_t err = motor_set_pulse(&drone.front_right_motor, (uint16_t)raw);
     printf("%ld\n", err);
 
     vTaskDelay(pdMS_TO_TICKS(10));
+
   }  
   // ----------------------
   
