@@ -377,8 +377,12 @@ drone_err_t MPU_accel_calc_angles(MPU_handle_t *imu, angle_data_t *angles)
 	float accel_y = (float)accelData.accel_y / imu->accel_sensitivity;
 	float accel_z = (float)accelData.accel_z / imu->accel_sensitivity;
 
-	float roll = atan(accel_y/sqrt(accel_x * accel_x + accel_z * accel_z))* (180.0f / M_PI); // calc angle, convert to degrees at the end
-	float pitch = -atan(accel_x/sqrt(accel_y * accel_y + accel_z * accel_z)) * (180.0f / M_PI);
+	// I swapped the angle calculations because of the orientation of the MPU on the drone
+	// float roll = atan(accel_y/sqrt(accel_x * accel_x + accel_z * accel_z))* (180.0f / M_PI); // calc angle, convert to degrees at the end
+	// float pitch = -atan(accel_x/sqrt(accel_y * accel_y + accel_z * accel_z)) * (180.0f / M_PI);
+
+	float pitch = atan(accel_y/sqrt(accel_x * accel_x + accel_z * accel_z)) * (180.0f / M_PI); // calc angle, convert to degrees at the end
+	float roll = -atan(accel_x/sqrt(accel_y * accel_y + accel_z * accel_z)) * (180.0f / M_PI);
 
 	angles->roll = roll;
 	angles->pitch = pitch;
@@ -395,8 +399,12 @@ drone_err_t MPU_gyro_calc_angles(MPU_handle_t *imu, angle_data_t *prev_angles, a
 		return err;
 	} 
 
-	angle_data->roll = prev_angles->roll + (gyroData.gyro_x * dt);
-	angle_data->pitch = prev_angles->pitch + (gyroData.gyro_y * dt);
+	// I swapped the angle calculations because of the orientation of the MPU on the drone
+	// angle_data->roll = prev_angles->roll + (gyroData.gyro_x * dt);
+	// angle_data->pitch = prev_angles->pitch + (gyroData.gyro_y * dt);
+
+	angle_data->roll = prev_angles->roll + (gyroData.gyro_y * dt);
+	angle_data->pitch = prev_angles->pitch + (gyroData.gyro_x * dt);
 	return DRONE_OK;
 }
 

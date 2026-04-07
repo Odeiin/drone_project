@@ -28,17 +28,6 @@
 // freeRTOS queue for communication between tasks
 QueueHandle_t dataQueue;
 
-
-
-// ControlData_t controlDataGlobal = {
-//   .forwardSpeed = 0,
-//   .rightSpeed = 0,
-//   .verticalSpeed = 0,
-//   .turnSpeed = 0,
-//   .button = false,
-//   .dataIsNew = false
-// };
-
 // --------- globals -------------------------------
 
 
@@ -55,7 +44,7 @@ void app_main(void)
 
   // i think the reading task should maybe be higher priority than the sending data task
   // if the control data isnt updated sending doesnt even matter anyway
-  xTaskCreate(readInputsTask, "reading inputs", 2500, NULL, 1, NULL);
+  xTaskCreate(readInputsTask, "reading inputs", 2500, NULL, 2, NULL);
 
   xTaskCreate(sendDataTask, "sending data", 8192, NULL, 1, NULL); // not sure about mem size
 
@@ -108,12 +97,12 @@ void sendDataTask(void *arg) {
       continue;
     }
 
-    // int f = packet.forwardSpeed;
-    // int r = packet.rightSpeed;
-    // int v = packet.verticalSpeed;
-    // int t = packet.turnSpeed;
-    // int b = packet.button;
-    // printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
+    int f = packet.forwardSpeed;
+    int r = packet.rightSpeed;
+    int v = packet.verticalSpeed;
+    int t = packet.turnSpeed;
+    int b = packet.button;
+    printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
 
     err = NRF_push_packet(&radio, (const uint8_t *)&packet, sizeof(packet));
     assert(err != NRF_INVALID_PACKET_LEN); 
@@ -130,17 +119,13 @@ void sendDataTask(void *arg) {
 
 // should add some sort of calibration that centers the values at the start of each function and use a deadzone
 void readInputsTask(void *arg) {
-  printf("hi");
   joystick_handle_t joysticks;
-  printf("1");
   drone_err_t err = init_joysticks(&joysticks);
   assert(err == DRONE_OK);
 
-  printf("2");
   err = joysticks_calibrate(&joysticks);
   assert(err == DRONE_OK);
   //joystick_handle_t
-  printf("3");
   for (;;) {
     err  = readControls(&joysticks);
     assert(err == DRONE_OK);

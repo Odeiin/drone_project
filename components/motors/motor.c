@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -67,14 +69,20 @@ drone_err_t drone_motors_init(drone_motor_controller_t *drone)
 drone_err_t motor_set_pulse(motor_handle_t *motor, uint16_t pulse_us)
 {
   // might change this, to turn the motor off might possibly have to be less than 1000
-  if (pulse_us < 1000 || pulse_us > 2000) {
+  // it looks like 1000us pulse makes motor stop
+  // if (pulse_us < 1000 || pulse_us > 2000) {
+  //   return MOTOR_INVALID_PULSE_LEN;
+  // }
+
+  if (pulse_us > MOTOR_MAX_PULSE_PERIOD) {
     return MOTOR_INVALID_PULSE_LEN;
   }
 
   int duty = (pulse_us * ((1 << LEDC_RES_INT) - 1)) / LEDC_PERIOD_US;
 
   // set pulse
-  ESP_ERROR_CHECK(ledc_set_duty_and_update(LEDC_MODE, motor->channel, duty, 0));
+  ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, motor->channel, duty));
+  ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, motor->channel));
   return DRONE_OK;
 }
 
@@ -125,6 +133,7 @@ drone_err_t drone_motors_calibrate(drone_motor_controller_t *drone)
 }
 
 
+// in degrees
 PID_angle_correction_t PID_angle_calculation(angle_data_t angle_data, angle_data_t target_angle, PID_state_t *state, float dt) 
 {
   float roll_error = target_angle.roll - angle_data.roll;
@@ -135,8 +144,25 @@ PID_angle_correction_t PID_angle_calculation(angle_data_t angle_data, angle_data
   float pitch_prop_term = state->Kp * pitch_error;
 
   // integral terms
-  state->roll_int_term += roll_error * dt;
-  state->pitch_int_term += pitch_error * dt;
+  // deadband applied to prevent integral build up
+  if (fabsf(roll_error) > PID_I_DEADBAND) {
+      state->roll_int_term += roll_error * dt;
+  }
+  if (fabsf(pitch_error) > PID_I_DEADBAND) {
+      state->pitch_int_term += pitch_error * dt;
+  }
+
+  // clamping the integral to within a certain range, prevents a large integral build up and then overshoot
+  // roll
+  if (state->roll_int_term > PID_INTEGRAL_LIMIT)
+    state->roll_int_term = PID_INTEGRAL_LIMIT;
+  if (state->roll_int_term < -PID_INTEGRAL_LIMIT)
+    state->roll_int_term = -PID_INTEGRAL_LIMIT;
+  // pitch
+  if (state->pitch_int_term > PID_INTEGRAL_LIMIT)
+    state->pitch_int_term = PID_INTEGRAL_LIMIT;
+  if (state->pitch_int_term < -PID_INTEGRAL_LIMIT)
+    state->pitch_int_term = -PID_INTEGRAL_LIMIT;
 
   // differentiation terms
   float roll_diff_term = state->Kd * (roll_error - state->roll_err_buffer) / dt;
@@ -150,6 +176,10 @@ PID_angle_correction_t PID_angle_calculation(angle_data_t angle_data, angle_data
     .roll_correction = roll_prop_term + (state->Ki * state->roll_int_term) + roll_diff_term,
     .pitch_correction = pitch_prop_term + (state->Ki * state->pitch_int_term) + pitch_diff_term,
   };
+
+  // printf("roll: P=%f I=%f D=%f | pitch: P=%f I=%f D=%f | DT => %f  ",
+  //      roll_prop_term, state->Ki * state->roll_int_term, roll_diff_term,
+  //      pitch_prop_term, state->Ki * state->pitch_int_term, pitch_diff_term, dt);
 
   return correction;
 }

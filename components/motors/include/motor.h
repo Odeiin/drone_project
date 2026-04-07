@@ -13,22 +13,25 @@
 #define LEDC_PERIOD_US			(1000000 / LEDC_FREQUENCY)
 
 #define FRONT_RIGHT_MOTOR_PIN           33
-#define FRONT_LEFT_MOTOR_PIN            32 
-#define BACK_RIGHT_MOTOR_PIN            25 
+#define FRONT_LEFT_MOTOR_PIN            25 
+#define BACK_RIGHT_MOTOR_PIN            32 
 #define BACK_LEFT_MOTOR_PIN             26 
 
 #define MOTOR_MAX_PULSE_PERIOD			2000 // 2ms pulse
 #define MOTOR_MIN_PULSE_PERIOD			1000 // 1ms pulse
 
+// acceptable range around target angle
+#define PID_I_DEADBAND 					2.0f // in degrees
+#define PID_INTEGRAL_LIMIT 				5.0f // max integral value (+-)
 
 #define PID_DEFAULT_CONFIG { \
-    .Kp = 1.0f, \
+    .Kp = 0.1f, \
     .Ki = 0.0f, \
-    .Kd = 0.0f, \
-	.roll_err_buffer = 1.0f, \
-	.pitch_err_buffer = 1.0f, \
-	.roll_int_term = 1.0f, \
-	.pitch_int_term = 1.0f \
+    .Kd = 0.1f, \
+	.roll_err_buffer = 0.0f, \
+	.pitch_err_buffer = 0.0f, \
+	.roll_int_term = 0.0f, \
+	.pitch_int_term = 0.0f \
 }
 
 typedef struct {

@@ -18,15 +18,20 @@
 #define JOYSTICK_CALIBRATION_SAMPLES 101 // odd number for eas as im finding median
 #define JOYSTICK_CALIBRATION_SAMPLE_CENTER 51
 #define JOYSTICK_DEADZONE 100
+#define JOYSTICK_FILTER_ALPHA 0.05
+#define JOYSTICK_DEADBAND 300
+#define JOYSTICK_MAX_STEP 100
+
+#define BUTTON_DEBOUNCE_PERIOD_US 300000 
+
+// button GPIO input
+#define buttonGPIO 25
 
 // joystick ADC1 inputs
 extern const adc_channel_t leftStickX; // left/right
 extern const adc_channel_t leftStickY; // forward/back
 extern const adc_channel_t rightStickX; // turn
 extern const adc_channel_t rightStickY; // vertical
-
-// button GPIO input
-// const int stopButton = 12; // DOESNT EXIST ON PROTOTYPE BOARD
 
 // perhaps un-necessary
 typedef struct{
