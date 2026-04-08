@@ -37,7 +37,9 @@ Dual joystick inputs
 
 - make it so button from control makes the drone leave startup mode and then also emergency stop once its in operating mode
 - add LED to drone which indicates when its in start up mode
-- add altitude detection so drone maintains its level instead of having to set the vertical speed using the joysticks
+- add altitude detection so drone maintains its level instead of having to set the vertical speed using the joysticks, allowing for altitude hold
 - also add a safety switch on the drone
 - have receiver send angle measurement back to transmitter so telemetary data can be read
+- improving PID tuning
+- yaw stabilisation
 
