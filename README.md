@@ -1,4 +1,4 @@
-*ESP32 Quadcopter (ESP-IDF + FreeRTOS)*
+**ESP32 Quadcopter (ESP-IDF + FreeRTOS)**
 
 personal drone project with the objective of learning about esp-idf and free rtos aswell as developing my embedded systems programming skills
 
@@ -6,7 +6,7 @@ Currently drone is in a semi working state but it is not stabalising properly on
 
 The system uses IMU-based attitude estimation and a FreeRTOS-based control loop to stabilise the drone.
 
-*Features*
+**Features**
 ESP32 flight controller using ESP-IDF
 MPU6050 IMU driver
 Complementary filter for attitude estimation
@@ -17,7 +17,7 @@ ESC control via PWM outputs
 Joystick transmitter with deadzone + filtering
 
 
-*Hardware*
+**Hardware**
 
 Flight controller:
 
@@ -33,7 +33,7 @@ NRF24L01 radio
 Dual joystick inputs
 
 
-*future improvements*
+**future improvements**
 
 - make it so button from control makes the drone leave startup mode and then also emergency stop once its in operating mode
 - add LED to drone which indicates when its in start up mode
