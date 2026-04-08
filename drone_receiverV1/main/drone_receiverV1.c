@@ -65,9 +65,9 @@ void app_main(void) {
 
   // NRF needs 100ms to settle, id seen waiting longer somewhere, cant hurt
   vTaskDelay(pdMS_TO_TICKS(1000)); 
-  xTaskCreate(imuTask, "IMU task", 8192, NULL, 1, NULL); // not sure about mem size, more than this needs though
+  xTaskCreate(imuTask, "IMU task", 8192, NULL, 2, NULL); // not sure about mem size, more than this needs though
   xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
-  xTaskCreate(flight_control_task, "test", 8192, NULL, 1, NULL); // not sure about mem size
+  xTaskCreate(flight_control_task, "test", 8192, NULL, 3, NULL); // not sure about mem size
 }
 
 
@@ -128,7 +128,7 @@ void flight_control_task(void *arg)
   int16_t pitch = 0;
   while (1) {
     // wait till theres new angle data
-    if (xQueueReceive(angle_queue, &angle_data, 0) == errQUEUE_EMPTY) {
+    if (xQueueReceive(angle_queue, &angle_data, pdMS_TO_TICKS(20)) == errQUEUE_EMPTY) {
       continue;
     }
     // update target angle if theres new control data
@@ -145,7 +145,7 @@ void flight_control_task(void *arg)
     // int v = control_data.verticalSpeed;
     // int t = control_data.turnSpeed;
     // int b = control_data.button;
-    // printf("f: %d, r: %d, v: %d, t: %d, b: %d   ", f, r, v, t, b);
+    // printf("f: %d, r: %d, v: %d, t: %d, b: %d   \n", f, r, v, t, b);
 
 
     // PID calculations
@@ -161,8 +161,9 @@ void flight_control_task(void *arg)
     // using time for throttle calculation aswell
     t1 = t2; // time of latest angle data
 
+    // need to change this currently youre just dividing it every loop
     // throttle should be adjusted based on drone angle so that it maintains its throttle regardless of the drones angle
-    throttle = throttle / (cos(angle_data.pitch * (M_PI / 180.0f)) * cos(angle_data.roll * (M_PI / 180.0f))); // converting to radians
+    //throttle = throttle / (cos(angle_data.pitch * (M_PI / 180.0f)) * cos(angle_data.roll * (M_PI / 180.0f))); // converting to radians
 
     // printf(" !! throttle value -> %d !! ", throttle);
 
@@ -201,7 +202,6 @@ void flight_control_task(void *arg)
     // printf("motor variables: roll -> %d, pitch -> %d", roll, pitch);
     // printf("current angles: roll -> %f, pitch -> %f   ", angle_data.roll, angle_data.pitch);
     // printf("PID values: roll -> %f , pitch -> %f\n", angle_corrections.roll_correction, angle_corrections.pitch_correction);
-    vTaskDelay(pdMS_TO_TICKS(1));
   }
 
 }
@@ -241,7 +241,7 @@ void imuTask(void *arg)
     // put data in global (thread safe)
     xQueueOverwrite(angle_queue, &filterAngles); // only the most recent value matters
     //printf("filter angles: %f, %f \n", filterAngles.roll, filterAngles.pitch);
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
@@ -276,7 +276,7 @@ void getDataTask(void *arg)
     ControlData_t packet = {0};
     err = NRF_read_Fifo(&radio, (uint8_t *)&packet, sizeof(packet));
     if (err == NRF_EMPTY_RXFIFO) {
-      vTaskDelay(pdMS_TO_TICKS(10));
+      vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
     assert(err == DRONE_OK);
@@ -293,7 +293,7 @@ void getDataTask(void *arg)
     
     // handle data if received properly
 
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(5));
   }
 }
 

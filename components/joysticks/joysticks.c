@@ -220,7 +220,7 @@ drone_err_t readControls(joystick_handle_t *joysticks) {
 
   // joystick inputs are currently bad and noisy so im trying to improve the readings below
 
-  // applying low pass filter then deadband to joystick inputs to make jittery inputs effect the drone less
+  // applying low pass filter to joystick inputs to make jittery inputs effect the drone less
   static float filtered_verticalSpeed = 0.0f;
   static float filtered_forwardSpeed  = 0.0f;
   static float filtered_rightSpeed    = 0.0f;
@@ -231,10 +231,10 @@ drone_err_t readControls(joystick_handle_t *joysticks) {
   filtered_rightSpeed += JOYSTICK_FILTER_ALPHA * (raw_rightSpeed - filtered_rightSpeed);
   filtered_turnSpeed += JOYSTICK_FILTER_ALPHA * (raw_turnSpeed - filtered_turnSpeed);
 
-  filtered_verticalSpeed = apply_deadband(filtered_verticalSpeed, JOYSTICK_DEADBAND);
-  filtered_forwardSpeed = apply_deadband(filtered_forwardSpeed, JOYSTICK_DEADBAND);
-  filtered_rightSpeed = apply_deadband(filtered_rightSpeed, JOYSTICK_DEADBAND);
-  filtered_turnSpeed = apply_deadband(filtered_turnSpeed, JOYSTICK_DEADBAND);
+  // filtered_verticalSpeed = apply_deadband(filtered_verticalSpeed, JOYSTICK_DEADBAND);
+  // filtered_forwardSpeed = apply_deadband(filtered_forwardSpeed, JOYSTICK_DEADBAND);
+  // filtered_rightSpeed = apply_deadband(filtered_rightSpeed, JOYSTICK_DEADBAND);
+  // filtered_turnSpeed = apply_deadband(filtered_turnSpeed, JOYSTICK_DEADBAND);
   
   static int16_t prev_vertical = 0;
   static int16_t prev_forward = 0;
