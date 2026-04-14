@@ -8,7 +8,7 @@ The system uses IMU-based attitude estimation and a FreeRTOS-based control loop 
 
 **Drone test video**
 
-https://drive.google.com/file/d/14mwNdu5R0mnWLjxRq3M5KGZ8wNb00aAt/view?usp=drive_link
+https://drive.google.com/file/d/14mwNdu5R0mnWLjxRq3M5KGZ8wNb00aAt/view?usp=sharing
 
 Video showing a stabilization test where the drone attempts to self-balance when tilted.
 The oscillation indicates the feedback control loop is active, with the motors responding to IMU angle measurements.
