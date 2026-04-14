@@ -242,10 +242,10 @@ drone_err_t readControls(joystick_handle_t *joysticks) {
   static int16_t prev_turn = 0;
 
   // slew rate limit
-  joystickData.verticalSpeed  = limit_slew_rate(filtered_verticalSpeed, prev_vertical, JOYSTICK_MAX_STEP);
-  joystickData.forwardSpeed = limit_slew_rate(filtered_forwardSpeed, prev_forward, JOYSTICK_MAX_STEP);
-  joystickData.rightSpeed  = limit_slew_rate(filtered_rightSpeed, prev_right, JOYSTICK_MAX_STEP);
-  joystickData.turnSpeed  = limit_slew_rate(filtered_turnSpeed, prev_turn, JOYSTICK_MAX_STEP);
+  joystickData.verticalSpeed  = limit_slew_rate((int16_t)filtered_verticalSpeed, prev_vertical, JOYSTICK_MAX_STEP);
+  joystickData.forwardSpeed = limit_slew_rate((int16_t)filtered_forwardSpeed, prev_forward, JOYSTICK_MAX_STEP);
+  joystickData.rightSpeed  = limit_slew_rate((int16_t)filtered_rightSpeed, prev_right, JOYSTICK_MAX_STEP);
+  joystickData.turnSpeed  = limit_slew_rate((int16_t)filtered_turnSpeed, prev_turn, JOYSTICK_MAX_STEP);
 
   prev_vertical = joystickData.verticalSpeed;
   prev_forward = joystickData.forwardSpeed;

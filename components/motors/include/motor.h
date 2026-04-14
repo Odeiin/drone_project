@@ -21,13 +21,13 @@
 #define MOTOR_MIN_PULSE_PERIOD			1000 // 1ms pulse
 
 // acceptable range around target angle
-#define PID_I_DEADBAND 					2.0f // in degrees
+#define PID_I_DEADBAND 					3.0f // in degrees
 #define PID_INTEGRAL_LIMIT 				5.0f // max integral value (+-)
 
 #define PID_DEFAULT_CONFIG { \
-    .Kp = 0.1f, \
+    .Kp = 2.0f, \
     .Ki = 0.0f, \
-    .Kd = 0.1f, \
+    .Kd = 0.5f, \
 	.roll_err_buffer = 0.0f, \
 	.pitch_err_buffer = 0.0f, \
 	.roll_int_term = 0.0f, \

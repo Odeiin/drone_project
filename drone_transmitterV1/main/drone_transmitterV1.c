@@ -119,7 +119,7 @@ void sendDataTask(void *arg) {
 
 // should add some sort of calibration that centers the values at the start of each function and use a deadzone
 void readInputsTask(void *arg) {
-  joystick_handle_t joysticks;
+  joystick_handle_t joysticks = {0};
   drone_err_t err = init_joysticks(&joysticks);
   assert(err == DRONE_OK);
 

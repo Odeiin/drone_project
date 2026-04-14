@@ -342,9 +342,9 @@ drone_err_t MPU_read_gyro(MPU_handle_t *imu, gyro_data_t *data)
 	data->gyro_y -= imu->gyro_calibration_vals.gyro_y;
 	data->gyro_z -= imu->gyro_calibration_vals.gyro_z;
 
-	data->gyro_x = data->gyro_x / imu->gyro_sensitivity; // convert to degrees
-	data->gyro_y = data->gyro_y / imu->gyro_sensitivity;
-	data->gyro_z = data->gyro_z / imu->gyro_sensitivity;
+	// data->gyro_x = data->gyro_x / imu->gyro_sensitivity; // convert to degrees
+	// data->gyro_y = data->gyro_y / imu->gyro_sensitivity;
+	// data->gyro_z = data->gyro_z / imu->gyro_sensitivity;
 
 	return DRONE_OK;
 }
@@ -403,8 +403,12 @@ drone_err_t MPU_gyro_calc_angles(MPU_handle_t *imu, angle_data_t *prev_angles, a
 	// angle_data->roll = prev_angles->roll + (gyroData.gyro_x * dt);
 	// angle_data->pitch = prev_angles->pitch + (gyroData.gyro_y * dt);
 
-	angle_data->roll = prev_angles->roll + (gyroData.gyro_y * dt);
-	angle_data->pitch = prev_angles->pitch + (gyroData.gyro_x * dt);
+	// changed how the float conversion happens between calc angles and read gyro
+	float gyro_x_dps = (float)gyroData.gyro_x / imu->gyro_sensitivity;
+	float gyro_y_dps = (float)gyroData.gyro_y / imu->gyro_sensitivity;
+
+	angle_data->roll = prev_angles->roll + (gyro_y_dps * dt);
+	angle_data->pitch = prev_angles->pitch + (gyro_x_dps* dt);
 	return DRONE_OK;
 }
 

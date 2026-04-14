@@ -138,7 +138,7 @@ void flight_control_task(void *arg)
     
     }
 
-
+    printf("target angles: roll -> %f, pitch -> %f  ", target_angle.roll, target_angle.pitch);
 
     // int f = control_data.forwardSpeed;
     // int r = control_data.rightSpeed;
@@ -199,9 +199,9 @@ void flight_control_task(void *arg)
     //    target_angle.roll, target_angle.pitch,
     //    angle_data.roll, angle_data.pitch);
 
-    // printf("motor variables: roll -> %d, pitch -> %d", roll, pitch);
-    // printf("current angles: roll -> %f, pitch -> %f   ", angle_data.roll, angle_data.pitch);
-    // printf("PID values: roll -> %f , pitch -> %f\n", angle_corrections.roll_correction, angle_corrections.pitch_correction);
+    printf("motor variables: throttle -> %d, roll -> %d, pitch -> %d  ", throttle, roll, pitch);
+    printf("current angles: roll -> %f, pitch -> %f   ", angle_data.roll, angle_data.pitch);
+    printf("PID values: roll -> %f , pitch -> %f\n", angle_corrections.roll_correction, angle_corrections.pitch_correction);
   }
 
 }

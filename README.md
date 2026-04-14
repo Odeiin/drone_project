@@ -6,6 +6,12 @@ Currently drone is in a semi working state but it is not stabalising properly on
 
 The system uses IMU-based attitude estimation and a FreeRTOS-based control loop to stabilise the drone.
 
+**Drone test video**
+https://drive.google.com/file/d/14mwNdu5R0mnWLjxRq3M5KGZ8wNb00aAt/view?usp=drive_link
+Video showing a stabilization test where the drone attempts to self-balance when tilted.
+The oscillation indicates the feedback control loop is active, with the motors responding to IMU angle measurements.
+Although the gains are not yet tuned for stable hovering, this demonstrates closed-loop stabilization is functioning and marks a milestone in development.
+
 **Features**
 ESP32 flight controller using ESP-IDF
 MPU6050 IMU driver
