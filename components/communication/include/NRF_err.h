@@ -12,3 +12,5 @@
 #define NRF_FULL_RXFIFO         (NRF_ERR_BASE + 7)
 #define NRF_INVALID_PACKET_LEN  (NRF_ERR_BASE + 8)
 #define NRF_INCORRECT_STATE     (NRF_ERR_BASE + 9)
+#define NRF_TX_TIMEOUT          (NRF_ERR_BASE + 10)
+#define NRF_MAX_RT              (NRF_ERR_BASE + 11)

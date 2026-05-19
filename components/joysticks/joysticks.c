@@ -175,6 +175,7 @@ drone_err_t readControls(joystick_handle_t *joysticks) {
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
+  printf("raw vert:%d ", raw);
   int16_t raw_verticalSpeed = applyDeadzone(raw - joysticks->center_vertical, JOYSTICK_DEADZONE);
 
   // right stick left/right
@@ -182,6 +183,7 @@ drone_err_t readControls(joystick_handle_t *joysticks) {
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
+  printf("raw turn:%d ", raw);
   int16_t raw_turnSpeed = applyDeadzone(raw - joysticks->center_turn, JOYSTICK_DEADZONE);
 
   // left stick up/down
@@ -189,6 +191,7 @@ drone_err_t readControls(joystick_handle_t *joysticks) {
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
+  printf("raw forw:%d ", raw);
   int16_t raw_forwardSpeed = applyDeadzone(raw - joysticks->center_forward, JOYSTICK_DEADZONE);
 
   // left stick left/right
@@ -196,6 +199,7 @@ drone_err_t readControls(joystick_handle_t *joysticks) {
 	if (err != ESP_OK) {
 		return JOYSTICK_READ_FAIL;
 	}
+  printf("raw right:%d\n", raw);
   int16_t raw_rightSpeed = applyDeadzone(raw - joysticks->center_right, JOYSTICK_DEADZONE);
 
 

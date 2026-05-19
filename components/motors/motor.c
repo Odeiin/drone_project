@@ -167,6 +167,10 @@ PID_angle_correction_t PID_angle_calculation(angle_data_t angle_data, angle_data
   // differentiation terms
   float roll_diff_term = state->Kd * (roll_error - state->roll_err_buffer) / dt;
   float pitch_diff_term = state->Kd * (pitch_error - state->pitch_err_buffer) / dt;
+  // ------------------------ gonna try this ---------------------------------------------
+  // float roll_diff_term = -state->Kd * (angle_data.roll - state->roll_angle_buffer) / dt;
+  // float pitch_diff_term = -state->Kd * (angle_data.pitch - state->pitch_angle_buffer) / dt;
+  // ------------------------ gonna try this ---------------------------------------------
 
   // store previous errors for next function call
   state->roll_err_buffer = roll_error;

@@ -4,6 +4,8 @@
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 
+#include "NRF24L01.h"
+
 #include "esp_adc/adc_oneshot.h"
 #include "hal/adc_types.h"
 
@@ -27,10 +29,21 @@
 #define PITCH_RESPONSE_FACTOR 1.0
 
 
+// RADIO CONSTANTS
+#define RADIO_CE_PIN 4
+#define RADIO_CSN_PIN 14
+#define RADIO_IRQ_PIN 22
+
+#define RADIO_CHANNEL 50
+#define TELEMETRY_PERIOD_US 100000
+
+static const NRF_addr_t RADIO_RX_ADDR = {0x1A, 0x1A, 0x1A, 0x1A, 0x1A};
+static const NRF_addr_t RADIO_TX_ADDR = {0x50, 0x50, 0x50, 0x50, 0x50};
+
 
 // --------------- TASKS ----------------------
-// RTOS task, receives data from radio
-void getDataTask(void *arg);
+// RTOS task, receives data from radio and sends telemetry data
+void radioTask(void *arg);
 
 // RTOS task, gets data from inertial measurement unit (IMU), should read and filter data for use when controlling flight
 void imuTask(void *arg);

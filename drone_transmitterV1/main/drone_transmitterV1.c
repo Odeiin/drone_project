@@ -17,6 +17,7 @@
 
 #include "drone_transmitterV1.h"
 #include "NRF24L01.h"
+#include "MPU6050.h"
 #include "joysticks.h"
 #include "control_protocol.h"
 
@@ -46,71 +47,84 @@ void app_main(void)
   // if the control data isnt updated sending doesnt even matter anyway
   xTaskCreate(readInputsTask, "reading inputs", 2500, NULL, 2, NULL);
 
-  xTaskCreate(sendDataTask, "sending data", 8192, NULL, 1, NULL); // not sure about mem size
+  xTaskCreate(radioTask, "radio task", 8192, NULL, 1, NULL); // not sure about mem size
 
 }
 
 // maybe make an NRF_responding function or something to check it works at the start of each program
-void sendDataTask(void *arg) {
-  uint8_t ce_pin = 4;
-  uint8_t csn_pin = 14;
-  uint8_t irq_pin = 22;
-  
-  NRF_addr_t txAddr = {0x1A, 0x1A, 0x1A, 0x1A, 0x1A};
-  NRF_addr_t rxAddr = {0x50, 0x50, 0x50, 0x50, 0x50};
-  NRF_channel_t channel = 50;
+void radioTask(void *arg) 
+{
   NRF_handle_t radio;
 
-  drone_err_t err = NRF_init(&radio, ce_pin, csn_pin, irq_pin);
+  // controller data sent to drone
+  ControlData_t packet = {0};
+  // data from drone for logging
+  angle_data_t telemetry_data = {0};
+
+  // initialises radio
+  drone_err_t err = NRF_init(&radio, RADIO_CE_PIN, RADIO_CSN_PIN, RADIO_IRQ_PIN);
   assert(err == DRONE_OK);
-  err = NRF_set_address(&radio, rxAddr, txAddr);
+  err = NRF_default_setup(&radio, RADIO_RX_ADDR, RADIO_TX_ADDR, RADIO_CHANNEL, sizeof(angle_data_t));
   assert(err == DRONE_OK);
-  err = NRF_set_packet_length(&radio, sizeof(ControlData_t));
+  err = NRF_flush_TX(&radio);
   assert(err == DRONE_OK);
-  err = NRF_set_data_rate(&radio, DATA_RATE_250KBPS);
+  err = NRF_flush_RX(&radio);
   assert(err == DRONE_OK);
-  err = NRF_set_power_level(&radio, MIN);
-  assert(err == DRONE_OK);
-  err = NRF_set_channel(&radio, channel);
+  err = NRF_clear_interrupts(&radio);
   assert(err == DRONE_OK);
   
   for (;;) {
-    // if think this could be necessary to track the radio state if theres another task which used for receiving data but pointless currently
-    // probably shouldnt have multiple tasks interacting with the radio though
-    // if (radio.state != standby) {
-    //   something
-    // }
-
-
-    // uint8_t txBuffer[2];
-    // uint8_t rxBuffer[2];
-    // // read status
-    // txBuffer[0] = CMD_R_REG | 0x07;
-    // txBuffer[1] = CMD_NOP;
-    // SPI_transmit(radio.SPI, txBuffer, rxBuffer, 2, 2);
-
-
-
-    ControlData_t packet;
     // if queue empty
     if (xQueueReceive(dataQueue, &packet, 0) == errQUEUE_EMPTY) {
+      vTaskDelay(pdMS_TO_TICKS(1));
       continue;
     }
 
-    int f = packet.forwardSpeed;
-    int r = packet.rightSpeed;
-    int v = packet.verticalSpeed;
-    int t = packet.turnSpeed;
-    int b = packet.button;
-    printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
+    // checks if any telemetry data was received while this task was delayed
+    err = NRF_receive_data(&radio, (uint8_t *)&telemetry_data, sizeof(telemetry_data));
+    if (err == DRONE_OK) {
+      //printf("angle data: roll -> %f, pitch -> %f\n", telemetry_data.roll, telemetry_data.pitch);
+    } else if (err == NRF_EMPTY_RXFIFO) {
+      // no telemetry available, this is ok
+    } else {
+      printf("radio error when receiving: 0x%lx\n", err);
+    }
 
-    err = NRF_push_packet(&radio, (const uint8_t *)&packet, sizeof(packet));
-    assert(err != NRF_INVALID_PACKET_LEN); 
+    // briefly enters TX mode and will send control data
+    err = NRF_send_data(&radio, (const uint8_t *)&packet, sizeof(packet));
+    if (err != DRONE_OK) {
+      printf("radio error when sending: 0x%lx\n", err);
+    }
 
-    // i think the busy wait is the only real way to do this
-    // going to implement a hardware solution to this problem ^
-    err = NRF_pulse_TXmode(&radio);
-    assert(err == DRONE_OK);
+    // then will enter RX mode until theres more control data to send 
+    err = NRF_receive_data(&radio, (uint8_t *)&telemetry_data, sizeof(telemetry_data));
+    if (err == DRONE_OK) {
+      //printf("angle data: roll -> %f, pitch -> %f\n", telemetry_data.roll, telemetry_data.pitch);
+    } else if (err == NRF_EMPTY_RXFIFO) {
+      // no telemetry available, this is ok
+    } else {
+      printf("radio error when receiving: 0x%lx\n", err);
+    }
+
+    // // print status reg    
+    // uint8_t txBuffer[2];
+    // uint8_t rxBuffer[2];
+    
+    // txBuffer[0] = CMD_R_REG | 0x07; // read status
+    // txBuffer[1] = CMD_NOP;
+    // SPI_transmit(radio.SPI, txBuffer, rxBuffer, 2, 2);
+
+    // printf("status reg -> %x\n", rxBuffer[1]);
+
+
+
+
+    // int f = packet.forwardSpeed;
+    // int r = packet.rightSpeed;
+    // int v = packet.verticalSpeed;
+    // int t = packet.turnSpeed;
+    // int b = packet.button;
+    // printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
 
     vTaskDelay(pdMS_TO_TICKS(10));
   }
@@ -133,6 +147,15 @@ void readInputsTask(void *arg) {
     // put data in global (thread safe)
     ControlData_t data = joysticks.data;
     xQueueOverwrite(dataQueue, &data); // only the most recent value matters
+
+
+    // int f = data.forwardSpeed;
+    // int r = data.rightSpeed;
+    // int v = data.verticalSpeed;
+    // int t = data.turnSpeed;
+    // int b = data.button;
+    // printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
+
 
     // occasionally print stack headroom
     // static int counter = 0;

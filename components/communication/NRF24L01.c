@@ -6,16 +6,19 @@
 #include "driver/spi_master.h"
 #include "driver/spi_common.h"
 #include "driver/gpio.h"
+#include "esp_timer.h"
 
 #include "control_protocol.h"
 #include "NRF24L01.h"
+
 #include "drone_err.h"
 #include "NRF_err.h"
 #include "esp_err.h"
 
 
 // initialises a SPI communication and returns the handle
-spi_device_handle_t SPI_init(uint8_t CSN_PIN) {
+spi_device_handle_t SPI_init(uint8_t CSN_PIN) 
+{
 	spi_device_interface_config_t devconfig = {
     .clock_speed_hz = 2000000, // 2Mhz, kinda arbitrary choice for the time being
     .mode = 0,                 // CPOL + CPHA mode 0
@@ -47,7 +50,8 @@ spi_device_handle_t SPI_init(uint8_t CSN_PIN) {
 // transmits an SPI buffer, the receiver buffer is modified by this function, length is how many bits shifted out of MOSI
 // rxlength is how many bits are copied into the rx buffer
 // lengths are now bytes
-void SPI_transmit(spi_device_handle_t SPI, const void *txBuffer, void *rxBuffer, size_t length_Bytes, size_t rxLength_Bytes) {
+void SPI_transmit(spi_device_handle_t SPI, const void *txBuffer, void *rxBuffer, size_t length_Bytes, size_t rxLength_Bytes) 
+{
   spi_transaction_t trans;
   memset(&trans, 0, sizeof(trans));
 
@@ -63,8 +67,13 @@ void SPI_transmit(spi_device_handle_t SPI, const void *txBuffer, void *rxBuffer,
 }
 
 // initialises a NRF handle, moves radio to standby state, radio communication currently only supports pipe 0
-drone_err_t NRF_init(NRF_handle_t *radio, uint8_t CE_PIN, uint8_t CSN_PIN, uint8_t IRQ_PIN) {
+drone_err_t NRF_init(NRF_handle_t *radio, uint8_t CE_PIN, uint8_t CSN_PIN, uint8_t IRQ_PIN) 
+{
   radio->state = powerDown;
+  radio->CE_PIN = CE_PIN;
+  radio->CSN_PIN = CSN_PIN;
+  radio->IRQ_PIN = IRQ_PIN;
+
   radio->SPI = SPI_init(CSN_PIN);
   drone_err_t err = NRF_enter_standby(radio);
   if (err) {
@@ -103,14 +112,12 @@ drone_err_t NRF_init(NRF_handle_t *radio, uint8_t CE_PIN, uint8_t CSN_PIN, uint8
   txBuffer[1] = rxBuffer[1] | 0x04; // CRCO = 1 (2 bytes)
   SPI_transmit(radio->SPI, txBuffer, NULL, 2, 0);
 
-  radio->CE_PIN = CE_PIN;
-  radio->CSN_PIN = CSN_PIN;
-  radio->IRQ_PIN = IRQ_PIN;
   return DRONE_OK;
 }
 
 
-drone_err_t NRF_set_packet_length(NRF_handle_t *radio, size_t packetLength) {
+drone_err_t NRF_set_packet_length(NRF_handle_t *radio, size_t packetLength) 
+{
   if (packetLength > MAX_PACKET_SIZE || packetLength == 0) {
     return NRF_INVALID_PACKET_LEN;
   }
@@ -123,11 +130,12 @@ drone_err_t NRF_set_packet_length(NRF_handle_t *radio, size_t packetLength) {
   SPI_transmit(radio->SPI, txBuffer, NULL, 2, 0);
 
   radio->packetLength = packetLength;
-  return DRONE_OK;
+  return DRONE_OK; 
 }
 
 // currently only works for pipe 0 
-drone_err_t NRF_set_address(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t txAddr) {
+drone_err_t NRF_set_address(NRF_handle_t *radio, const NRF_addr_t rxAddr, const NRF_addr_t txAddr) 
+{
   uint8_t txBuffer[1 + 5];
 
   // setting RX_ADDR_P0
@@ -147,7 +155,8 @@ drone_err_t NRF_set_address(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t t
 
 // the reset values in the documentation says it resets -> 2Mbps but mine appears to reset -> 1Mbps
 // set to 250Kbps if too unreliable
-drone_err_t NRF_set_data_rate(NRF_handle_t *radio, data_rate_t dataRate) {
+drone_err_t NRF_set_data_rate(NRF_handle_t *radio, data_rate_t dataRate) 
+{
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
@@ -179,7 +188,8 @@ drone_err_t NRF_set_data_rate(NRF_handle_t *radio, data_rate_t dataRate) {
 }
 
 // the lower the power level the less susceptible to noise but less range 
-drone_err_t NRF_set_power_level(NRF_handle_t *radio, RF_power_level_t powerLevel) {
+drone_err_t NRF_set_power_level(NRF_handle_t *radio, RF_power_level_t powerLevel) 
+{
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
@@ -216,7 +226,8 @@ drone_err_t NRF_set_power_level(NRF_handle_t *radio, RF_power_level_t powerLevel
 }
 
 
-drone_err_t NRF_set_channel(NRF_handle_t *radio, NRF_channel_t RF_CH) {
+drone_err_t NRF_set_channel(NRF_handle_t *radio, NRF_channel_t RF_CH) 
+{
   if (RF_CH > 127) {
     return NRF_INVALID_CHANNEL;
   }
@@ -232,7 +243,8 @@ drone_err_t NRF_set_channel(NRF_handle_t *radio, NRF_channel_t RF_CH) {
 }
 
 
-drone_err_t NRF_enter_power_down(NRF_handle_t *radio) {
+drone_err_t NRF_enter_power_down(NRF_handle_t *radio) 
+{
   if (radio->state == powerDown) {
     return DRONE_OK;
   }
@@ -257,7 +269,8 @@ drone_err_t NRF_enter_power_down(NRF_handle_t *radio) {
 }
 
 
-drone_err_t NRF_enter_standby(NRF_handle_t *radio) {
+drone_err_t NRF_enter_standby(NRF_handle_t *radio) 
+{
   if (radio->state == standby) {
     return DRONE_OK;
   }
@@ -283,7 +296,8 @@ drone_err_t NRF_enter_standby(NRF_handle_t *radio) {
 }
 
 
-drone_err_t NRF_enter_RXmode(NRF_handle_t *radio) {
+drone_err_t NRF_enter_RXmode(NRF_handle_t *radio) 
+{
   if (radio->state == RXmode) {
     return DRONE_OK;
   }
@@ -308,8 +322,9 @@ drone_err_t NRF_enter_RXmode(NRF_handle_t *radio) {
   return DRONE_OK;
 }
 
-
-drone_err_t NRF_enter_TXmode(NRF_handle_t *radio) {
+// not maintained or tested, use NRF_pulse_TXmode
+drone_err_t NRF_enter_TXmode(NRF_handle_t *radio) 
+{
   if (radio->state == TXmode) {
     return DRONE_OK;
   }
@@ -339,7 +354,8 @@ drone_err_t NRF_enter_TXmode(NRF_handle_t *radio) {
 }
 
 // creates 10us pulse for sending data in TXmode, busy waits
-drone_err_t NRF_pulse_TXmode(NRF_handle_t *radio) {
+drone_err_t NRF_pulse_TXmode(NRF_handle_t *radio) 
+{
   if (radio->state != standby) {
     return NRF_ILLEGAL_TRANSITION;
   }
@@ -349,7 +365,11 @@ drone_err_t NRF_pulse_TXmode(NRF_handle_t *radio) {
 
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
+  drone_err_t err;
 
+  NRF_clear_interrupts(radio);
+
+  // required for transition
   txBuffer[0] = CMD_R_REG | 0x00; // read config
   txBuffer[1] = CMD_NOP;
   SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
@@ -358,20 +378,58 @@ drone_err_t NRF_pulse_TXmode(NRF_handle_t *radio) {
   txBuffer[1] = rxBuffer[1] & 0xFE; // config PRIM_RX bit -> 0
   SPI_transmit(radio->SPI, txBuffer, NULL, 2, 0);
 
-  gpio_set_level(radio->CE_PIN, 1); // required for transition
-  esp_rom_delay_us(11); // must be atleast 10us
+  // required for transition
+  gpio_set_level(radio->CE_PIN, 1);
+  esp_rom_delay_us(11); // must be high for atleast 10us for transition
   gpio_set_level(radio->CE_PIN, 0);
-  //esp_rom_delay_us(130);
 
-  txBuffer[0] = CMD_R_REG | 0x00; // read config
-  txBuffer[1] = CMD_NOP;
-  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
 
-  return DRONE_OK;
+  // wait until packet sent, unless timeout reached
+  int64_t start = esp_timer_get_time();
+
+  while ((esp_timer_get_time() - start) < NRF_TX_TIMEOUT_US) {
+    txBuffer[0] = CMD_R_REG | 0x07; // read status
+    txBuffer[1] = CMD_NOP;
+    SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
+
+    uint8_t status = rxBuffer[1];
+
+    if ((status & 0x20) == 0x20) { // if TX_DS asserted 
+      err = NRF_clear_interrupts(radio);
+      return DRONE_OK;
+    }
+
+    if ((status & 0x10) == 0x10) { // if MAX_RT asserted 
+      err = NRF_clear_interrupts(radio);
+      if (err != DRONE_OK) {
+        return err;
+      } 
+      err = NRF_flush_TX(radio);
+      if (err != DRONE_OK) {
+        return err;
+      } 
+      return NRF_MAX_RT;
+    }
+
+    esp_rom_delay_us(50); // delay for a short period 
+  }
+
+  // timeout reached
+  err = NRF_flush_TX(radio);
+  if (err != DRONE_OK) {
+    return err;
+  } 
+  err = NRF_clear_interrupts(radio);
+  if (err != DRONE_OK) {
+    return err;
+  } 
+
+  return NRF_TX_TIMEOUT;
 }
 
 // true if fifo empty, false otherwise
-bool NRF_TX_Fifo_Empty(NRF_handle_t *radio) {
+bool NRF_TX_Fifo_Empty(NRF_handle_t *radio) 
+{
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
@@ -386,7 +444,8 @@ bool NRF_TX_Fifo_Empty(NRF_handle_t *radio) {
 }
 
 // true if fifo full, false otherwise
-bool NRF_TX_Fifo_Full(NRF_handle_t *radio) {
+bool NRF_TX_Fifo_Full(NRF_handle_t *radio) 
+{
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
@@ -401,7 +460,8 @@ bool NRF_TX_Fifo_Full(NRF_handle_t *radio) {
 }
 
 // true if fifo empty, false otherwise
-bool NRF_RX_Fifo_Empty(NRF_handle_t *radio) {
+bool NRF_RX_Fifo_Empty(NRF_handle_t *radio) 
+{
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
@@ -416,7 +476,8 @@ bool NRF_RX_Fifo_Empty(NRF_handle_t *radio) {
 }
 
 // true if fifo full, false otherwise
-bool NRF_RX_Fifo_Full(NRF_handle_t *radio) {
+bool NRF_RX_Fifo_Full(NRF_handle_t *radio) 
+{
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
@@ -431,7 +492,8 @@ bool NRF_RX_Fifo_Full(NRF_handle_t *radio) {
 }
 
 
-drone_err_t NRF_clear_MAX_RT(NRF_handle_t *radio) {
+drone_err_t NRF_clear_MAX_RT(NRF_handle_t *radio) 
+{
   uint8_t txBuffer[2];
   uint8_t rxBuffer[2];
 
@@ -446,8 +508,9 @@ drone_err_t NRF_clear_MAX_RT(NRF_handle_t *radio) {
   return DRONE_OK;
 }
 
-// packetLength is in bytes
-drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, size_t packetLength) {
+// packetLength is in bytes, pushes packet to TX fifo
+drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, size_t packetLength) 
+{
   if (packetLength > MAX_PACKET_SIZE || packetLength == 0) {
     return NRF_INVALID_PACKET_LEN;
   }
@@ -466,7 +529,8 @@ drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, size_t p
 }
 
 // the receiver should be expecting a standard packet size so I thought it made sense to pass in a packet size 
-drone_err_t NRF_read_Fifo(NRF_handle_t *radio, uint8_t *packet, size_t packetLength) {
+drone_err_t NRF_read_Fifo(NRF_handle_t *radio, uint8_t *packet, size_t packetLength) 
+{
   if (packetLength > MAX_PACKET_SIZE || packetLength == 0) {
     return NRF_INVALID_PACKET_LEN;
   }
@@ -490,10 +554,12 @@ drone_err_t NRF_read_Fifo(NRF_handle_t *radio, uint8_t *packet, size_t packetLen
 }
 
 
-drone_err_t NRF_flush_TX(NRF_handle_t *radio) {
-  if (radio->state != TXmode) {
-    return NRF_INCORRECT_STATE;
-  }
+drone_err_t NRF_flush_TX(NRF_handle_t *radio) 
+{
+  // maybe not necessary
+  // if (radio->state != TXmode) {
+  //   return NRF_INCORRECT_STATE;
+  // }
 
   uint8_t txBuffer[1];
   //uint8_t rxBuffer[1];
@@ -503,3 +569,114 @@ drone_err_t NRF_flush_TX(NRF_handle_t *radio) {
 
   return DRONE_OK;
 }
+
+drone_err_t NRF_flush_RX(NRF_handle_t *radio) 
+{
+  // maybe not necessary
+  // if (radio->state != RXmode) {
+  //   return NRF_INCORRECT_STATE;
+  // }
+
+  uint8_t txBuffer[1];
+  //uint8_t rxBuffer[1];
+
+  txBuffer[0] = CMD_FLUSH_RX; // flush RX
+  SPI_transmit(radio->SPI, txBuffer, NULL, 1, 0);
+
+  return DRONE_OK;
+}
+
+// standard radio setup, packet length is packet length in RX 
+drone_err_t NRF_default_setup(NRF_handle_t *radio, const NRF_addr_t rxAddr, const NRF_addr_t txAddr, NRF_channel_t channel, size_t packet_length) 
+{
+  drone_err_t err = NRF_set_address(radio, rxAddr, txAddr);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = NRF_set_packet_length(radio, packet_length);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = NRF_set_data_rate(radio, DATA_RATE_250KBPS);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = NRF_set_power_level(radio, MIN);
+  if (err != DRONE_OK) {
+    return err;
+  }
+  err = NRF_set_channel(radio, channel);
+  if (err != DRONE_OK) {
+    return err;
+  }
+
+  return DRONE_OK;
+}
+
+// radio will recieve packet if one is available
+// drone should stay in RX mode most of the time as receiving control data is the priority and sending telemetry data is just best effor low priority
+// controller will also stay in RX mode when there isnt a new packet to send
+// the RX fifo wont fill unless the radio is in RX mode
+drone_err_t NRF_receive_data(NRF_handle_t *radio, uint8_t *packet, size_t packetLength) 
+{
+  // attempts to enter RX mode if it isnt already
+  drone_err_t err = NRF_enter_RXmode(radio);
+  if (err != DRONE_OK) {
+    return err;
+  }
+
+  // receive data, will return err if FIFO empty 
+  err = NRF_read_Fifo(radio, packet, packetLength);
+  if (err != DRONE_OK) {
+    return err;
+  }
+
+  return DRONE_OK;
+}
+
+// sends a packet from the radio, radio will return to standby afterwards
+drone_err_t NRF_send_data(NRF_handle_t *radio, const uint8_t *packet, size_t packetLength) 
+{
+  // go back to standby as radio will usually be in RX mode
+  drone_err_t err = NRF_enter_standby(radio); 
+  if (err != DRONE_OK) { 
+    return err; 
+  }
+
+  // data pushed to TX fifo
+  err = NRF_push_packet(radio, packet, packetLength);
+  if (err != DRONE_OK) {
+    return err;
+  }
+
+  // sends packet
+  err = NRF_pulse_TXmode(radio);
+  if (err != DRONE_OK) {
+    return err;
+  }
+
+  // go back to standby mode so radio can re-enter rx mode
+  err = NRF_enter_standby(radio); 
+  if (err != DRONE_OK) { 
+    return err; 
+  }
+
+  return DRONE_OK;
+}
+
+// clears MAX_RT, TX_DS and RX_DR flags in the status register
+drone_err_t NRF_clear_interrupts(NRF_handle_t *radio)
+{
+  uint8_t txBuffer[2];
+  uint8_t rxBuffer[2];
+
+  txBuffer[0] = CMD_R_REG | 0x07; // read status
+  txBuffer[1] = CMD_NOP;
+  SPI_transmit(radio->SPI, txBuffer, rxBuffer, 2, 2);
+
+  txBuffer[0] = CMD_W_REG | 0x07; // write to status
+  txBuffer[1] = rxBuffer[1] | 0x70; // MAX_RT, TX_DS and RX_DR -> 1 to clear bits
+  SPI_transmit(radio->SPI, txBuffer, NULL, 2, 0);
+
+  return DRONE_OK;
+} 

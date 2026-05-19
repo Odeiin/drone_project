@@ -1,3 +1,5 @@
+#pragma once
+
 #include "driver/spi_master.h"
 #include "driver/spi_common.h"
 #include "driver/gpio.h"
@@ -19,12 +21,14 @@
 #define CMD_W_REG 			0x20 // OR'd with 0b 000A AAAA where A is the reg address
 #define CMD_R_RX_PAYLOAD 	0x61
 #define CMD_W_TX_PAYLOAD 	0xA0
-#define CMD_FLUSH_TX 		0xA0
-#define CMD_FLUSH_TX 		0xA0
+#define CMD_FLUSH_TX 		0xE1
+#define CMD_FLUSH_RX 		0xE2
 #define CMD_NOP 			0xFF
 
 #define MAX_PACKET_SIZE 	32
 // #define PACKET_SIZE sizeof(ControlData_t)
+
+#define NRF_TX_TIMEOUT_US   1000 // timeout duration for TX in us
 
 // radio addresses are stored as an array of 5 uint8_t
 typedef uint8_t NRF_addr_t[5];
@@ -87,7 +91,7 @@ drone_err_t NRF_init(NRF_handle_t *radio, uint8_t CE_PIN, uint8_t CSN_PIN, uint8
 drone_err_t NRF_set_packet_length(NRF_handle_t *radio, size_t packetLength);
 
 // used to set TX address and RX address (RX address for pipe 0)
-drone_err_t NRF_set_address(NRF_handle_t *radio, NRF_addr_t rxAddr, NRF_addr_t txAddr);
+drone_err_t NRF_set_address(NRF_handle_t *radio, const NRF_addr_t rxAddr, const NRF_addr_t txAddr);
 
 // set RF data rate
 // the reset values in the documentation says it resets -> 2Mbps but mine appears to reset -> 1Mbps
@@ -125,8 +129,26 @@ bool NRF_RX_Fifo_Empty(NRF_handle_t *radio);
 // true if fifo full, false otherwise
 bool NRF_RX_Fifo_Full(NRF_handle_t *radio);
 
-// packetLength is in bytes
+// packetLength is in bytes, pushes packet to TX fifo
 drone_err_t NRF_push_packet(NRF_handle_t *radio, const uint8_t *packet, size_t packetLength);
 
 // the receiver should be expecting a standard packet size so I thought it made sense to pass in a packet size 
 drone_err_t NRF_read_Fifo(NRF_handle_t *radio, uint8_t *packet, size_t packetLength);
+
+// clear TX fifo
+drone_err_t NRF_flush_TX(NRF_handle_t *radio);
+
+// clear RX fifo
+drone_err_t NRF_flush_RX(NRF_handle_t *radio);
+
+// standard radio setup, packet length is packet length in RX 
+drone_err_t NRF_default_setup(NRF_handle_t *radio, const NRF_addr_t rxAddr, const NRF_addr_t txAddr, NRF_channel_t channel, size_t packet_length); 
+
+// radio will recieve packet if one is available
+drone_err_t NRF_receive_data(NRF_handle_t *radio, uint8_t *packet, size_t packetLength);
+
+// sends a packet from the radio, radio will return to standby afterwards
+drone_err_t NRF_send_data(NRF_handle_t *radio, const uint8_t *packet, size_t packetLength);
+
+// clears MAX_RT, TX_DS and RX_DR flags in the status register
+drone_err_t NRF_clear_interrupts(NRF_handle_t *radio);

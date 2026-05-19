@@ -31,6 +31,7 @@
 // --------- globals -------------------------------
 QueueHandle_t angle_queue;
 QueueHandle_t radio_queue;
+QueueHandle_t telemetry_queue;
 
 // --------- globals -------------------------------
 
@@ -63,11 +64,14 @@ void app_main(void) {
   radio_queue = xQueueCreate(1, sizeof(ControlData_t));
   assert(radio_queue != NULL);
 
+  telemetry_queue = xQueueCreate(1, sizeof(angle_data_t));
+  assert(telemetry_queue != NULL);
+
   // NRF needs 100ms to settle, id seen waiting longer somewhere, cant hurt
   vTaskDelay(pdMS_TO_TICKS(1000)); 
   xTaskCreate(imuTask, "IMU task", 8192, NULL, 2, NULL); // not sure about mem size, more than this needs though
-  xTaskCreate(getDataTask, "receiving data", 8192, NULL, 1, NULL); // not sure about mem size
-  xTaskCreate(flight_control_task, "test", 8192, NULL, 3, NULL); // not sure about mem size
+  xTaskCreate(radioTask, "radio task", 8192, NULL, 1, NULL); // not sure about mem size
+  xTaskCreate(flight_control_task, "flight control task", 8192, NULL, 3, NULL); // not sure about mem size
 }
 
 
@@ -138,7 +142,7 @@ void flight_control_task(void *arg)
     
     }
 
-    printf("target angles: roll -> %f, pitch -> %f  ", target_angle.roll, target_angle.pitch);
+    //printf("target angles: roll -> %f, pitch -> %f  ", target_angle.roll, target_angle.pitch);
 
     // int f = control_data.forwardSpeed;
     // int r = control_data.rightSpeed;
@@ -199,9 +203,9 @@ void flight_control_task(void *arg)
     //    target_angle.roll, target_angle.pitch,
     //    angle_data.roll, angle_data.pitch);
 
-    printf("motor variables: throttle -> %d, roll -> %d, pitch -> %d  ", throttle, roll, pitch);
-    printf("current angles: roll -> %f, pitch -> %f   ", angle_data.roll, angle_data.pitch);
-    printf("PID values: roll -> %f , pitch -> %f\n", angle_corrections.roll_correction, angle_corrections.pitch_correction);
+    //printf("motor variables: throttle -> %d, roll -> %d, pitch -> %d  ", throttle, roll, pitch);
+    //printf("current angles: roll -> %f, pitch -> %f   ", angle_data.roll, angle_data.pitch);
+    //printf("PID values: roll -> %f , pitch -> %f\n", angle_corrections.roll_correction, angle_corrections.pitch_correction);
   }
 
 }
@@ -240,60 +244,89 @@ void imuTask(void *arg)
     
     // put data in global (thread safe)
     xQueueOverwrite(angle_queue, &filterAngles); // only the most recent value matters
+    xQueueOverwrite(telemetry_queue, &filterAngles); // data sent back to controller for logging
     //printf("filter angles: %f, %f \n", filterAngles.roll, filterAngles.pitch);
     vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
-
-void getDataTask(void *arg) 
+// controls the radio on the drone and handles all data sent and received by it
+void radioTask(void *arg) 
 {
-  const uint8_t ce_pin = 4;
-  const uint8_t csn_pin = 14;
-  const uint8_t irq_pin = 22;
-
-  NRF_addr_t rxAddr = {0x1A, 0x1A, 0x1A, 0x1A, 0x1A};
-  NRF_addr_t txAddr = {0x50, 0x50, 0x50, 0x50, 0x50};
-  NRF_channel_t channel = 50;
   NRF_handle_t radio;  
   
-  drone_err_t err = NRF_init(&radio, ce_pin, csn_pin, irq_pin);
+  // data received from radio
+  ControlData_t packet = {0};
+  // data sent for logging
+  angle_data_t telemetry_data = {0};
+  // used for checking logging period
+  int64_t last_telemetry_time = esp_timer_get_time();
+
+  // initialises radio
+  drone_err_t err = NRF_init(&radio, RADIO_CE_PIN, RADIO_CSN_PIN, RADIO_IRQ_PIN);
   assert(err == DRONE_OK);
-  err = NRF_set_address(&radio, rxAddr, txAddr);
+  err = NRF_default_setup(&radio, RADIO_RX_ADDR, RADIO_TX_ADDR, RADIO_CHANNEL, sizeof(ControlData_t));
   assert(err == DRONE_OK);
-  err = NRF_set_packet_length(&radio, sizeof(ControlData_t));
+  err = NRF_flush_TX(&radio);
   assert(err == DRONE_OK);
-  err = NRF_set_data_rate(&radio, DATA_RATE_250KBPS);
+  err = NRF_flush_RX(&radio);
   assert(err == DRONE_OK);
-  err = NRF_set_power_level(&radio, MIN);
-  assert(err == DRONE_OK);
-  err = NRF_set_channel(&radio, channel);
+  err = NRF_clear_interrupts(&radio);
   assert(err == DRONE_OK);
 
-  err = NRF_enter_RXmode(&radio);
-  assert(err  == DRONE_OK);
   for (;;) {
-    ControlData_t packet = {0};
-    err = NRF_read_Fifo(&radio, (uint8_t *)&packet, sizeof(packet));
-    if (err == NRF_EMPTY_RXFIFO) {
+    err = NRF_receive_data(&radio, (uint8_t *)&packet, sizeof(packet));
+    // if received data delays for a bit and continues
+    if (err == DRONE_OK) {
+      printf("control data: vert->%d, forw->%d, right->%d, turn->%d\n", packet.verticalSpeed, packet.forwardSpeed, packet.rightSpeed, packet.turnSpeed);
+      // put data in global (thread safe)
+      xQueueOverwrite(radio_queue, &packet); // only the most recent value matters
+
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
-    assert(err == DRONE_OK);
 
-    // put data in global (thread safe)
-    xQueueOverwrite(radio_queue, &packet); // only the most recent value matters
+    if (err != NRF_EMPTY_RXFIFO) {
+      // some real radio error occurred
+      printf("radio error when receiving: 0x%lx\n", err);
+      vTaskDelay(pdMS_TO_TICKS(1));
+      continue;
+    }
+
+    // if no data to receive currently it will send some logging data to controller, saves some wasted time task switching I reckon
+    // this means it only logs sometimes as this is low priority
+    
+    int64_t now = esp_timer_get_time();
+    // checks that it doesnt send too often
+    if ((now - last_telemetry_time) >= TELEMETRY_PERIOD_US) {
+      // continues if no new telemetry data
+      if (xQueueReceive(telemetry_queue, &telemetry_data, 0) == errQUEUE_EMPTY) {
+        vTaskDelay(pdMS_TO_TICKS(1));
+        continue;
+      }
+      // send telemetry data
+      err = NRF_send_data(&radio, (const uint8_t *)&telemetry_data, sizeof(telemetry_data));
+      // debugging
+      // static int data_index = 0;
+      // printf("sending data (index:%d)\n", data_index);
+      // data_index++;
+      if (err != DRONE_OK) {
+        printf("radio error when sending: 0x%lx\n", err);
+      }
+
+
+      last_telemetry_time = now;
+    }
+
 
     // int f = packet.forwardSpeed;
     // int r = packet.rightSpeed;
     // int v = packet.verticalSpeed;
     // int t = packet.turnSpeed;
     // int b = packet.button;
-    // printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);   
-    
-    // handle data if received properly
+    // printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
 
-    vTaskDelay(pdMS_TO_TICKS(5));
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
