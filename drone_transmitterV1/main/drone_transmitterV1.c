@@ -119,12 +119,12 @@ void radioTask(void *arg)
 
 
 
-    // int f = packet.forwardSpeed;
-    // int r = packet.rightSpeed;
-    // int v = packet.verticalSpeed;
-    // int t = packet.turnSpeed;
-    // int b = packet.button;
-    // printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
+    int f = packet.forwardSpeed;
+    int r = packet.rightSpeed;
+    int v = packet.verticalSpeed;
+    int t = packet.turnSpeed;
+    int b = packet.button;
+    printf("f: %d, r: %d, v: %d, t: %d, b: %d\n", f, r, v, t, b);
 
     vTaskDelay(pdMS_TO_TICKS(10));
   }
